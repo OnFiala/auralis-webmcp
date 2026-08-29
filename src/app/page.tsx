@@ -20,6 +20,7 @@ import { downloadAttributableEvidence } from "../browser/evidence";
 import { requestLiveExplanation } from "../browser/model-client";
 import { registerAuralisWebMcpTools } from "../browser/webmcp";
 import { MAX_MODEL_ATTEMPTS_PER_SESSION } from "../contracts/runtime";
+import type { AuralisWebMcpPhase } from "../contracts/webmcp";
 import {
   canCompleteExperience,
   canRequestModelExplanation,
@@ -38,6 +39,13 @@ import {
   type ExperienceSupportMode,
 } from "../core/experience";
 import {
+  confirmWebMcpConsent,
+  confirmWebMcpProfile,
+  finishWebMcpSession,
+  getAuralisState,
+  resetWebMcpExperience,
+} from "../core/webmcp";
+import {
   FREQUENCY_GRID_HZ,
   MANUAL_THRESHOLD_MAX_DB_HL,
   MANUAL_THRESHOLD_MIN_DB_HL,
@@ -52,6 +60,7 @@ import {
   type PredefinedProfileId,
   type ProfileEntryOption,
 } from "../core/profile";
+import { AgentSessionShell } from "./agent-session-shell";
 
 type ActiveScreen =
   | "welcome"
@@ -492,6 +501,7 @@ export default function HomePage() {
   const modelRequestInFlightRef = useRef(false);
   const visible = projectVisibleExperienceState(experience);
   const terminalCompletion = projectTerminalCompletion(experience);
+  const agentState = getAuralisState(experienceController);
   const selectedTransformation = currentTransformedResult(experience);
   const renderingMode: ExperienceComparisonMode | null =
     experience.renders.reference.status === "rendering"
@@ -845,6 +855,28 @@ export default function HomePage() {
       dispatch({ type: "comparison-reset" });
     });
     setActiveScreen("profile");
+  }
+
+  function confirmAgentConsent() {
+    confirmWebMcpConsent(experienceController);
+  }
+
+  function confirmAgentProfile() {
+    confirmWebMcpProfile(experienceController, FAMILY_DINNER_SOURCE_ID);
+  }
+
+  function finishAgentSession() {
+    finishWebMcpSession(experienceController);
+  }
+
+  function resetAgentSession() {
+    audioEngineRef.current?.stop();
+    runIdRef.current = null;
+    setSceneTranscript([]);
+    flushSync(() => {
+      resetWebMcpExperience(experienceController);
+    });
+    setActiveScreen("welcome");
   }
 
   function downloadCurrentEvidence() {
@@ -1594,7 +1626,11 @@ export default function HomePage() {
 
         <fieldset
           className="support-selector listening-support-selector"
-          disabled={!experience.comparisonPlan || controlsLocked}
+          disabled={
+            !experience.comparisonPlan ||
+            controlsLocked ||
+            experience.webMcp.session !== null
+          }
           aria-describedby="listening-support-limitation"
         >
           <legend>Illustrative support for B</legend>
@@ -1733,7 +1769,8 @@ export default function HomePage() {
             disabled={
               !experience.confirmedProfile ||
               experience.source.status !== "ready" ||
-              controlsLocked
+              controlsLocked ||
+              experience.webMcp.session !== null
             }
           >
             <legend>Television</legend>
@@ -1774,7 +1811,8 @@ export default function HomePage() {
             disabled={
               !experience.confirmedProfile ||
               experience.source.status !== "ready" ||
-              controlsLocked
+              controlsLocked ||
+              experience.webMcp.session !== null
             }
           >
             <legend>Important speaker</legend>
@@ -2352,6 +2390,29 @@ export default function HomePage() {
     }
   }
 
+  function renderAgentSurface(phase: AuralisWebMcpPhase) {
+    switch (phase) {
+      case "awaiting_scene_load":
+      case "awaiting_volume_acknowledgement":
+        return renderSceneScreen();
+      case "awaiting_baseline_listening":
+      case "awaiting_baseline_observation":
+        return renderListeningScreen();
+      case "awaiting_comparison_listening":
+      case "awaiting_comparison_observation":
+        return renderInterventionsScreen();
+      case "ready_for_summary":
+        return renderExplanationScreen();
+      case "awaiting_session_stage":
+      case "awaiting_consent":
+      case "awaiting_profile_confirmation":
+      case "ready_for_baseline":
+      case "ready_for_adaptation":
+      case "complete":
+        return null;
+    }
+  }
+
   const showPersistentStop =
     activeScreen === "listening" ||
     activeScreen === "interventions" ||
@@ -2360,6 +2421,27 @@ export default function HomePage() {
     activeScreen === "welcome"
       ? null
       : experienceScreenOrder.indexOf(activeScreen) + 1;
+
+  if (experience.webMcp.session) {
+    return (
+      <AgentSessionShell
+        phase={agentState.phase}
+        revision={agentState.revision}
+        session={experience.webMcp.session}
+        humanGate={agentState.humanGate}
+        allowedNextTools={agentState.allowedNextTools}
+        controlsBusy={controlsLocked}
+        stopAvailable={isPlaying || isRendering}
+        onStopImmediately={stopPlayback}
+        onConfirmConsent={confirmAgentConsent}
+        onConfirmProfile={confirmAgentProfile}
+        onFinishSession={finishAgentSession}
+        onResetSession={resetAgentSession}
+      >
+        {renderAgentSurface(agentState.phase)}
+      </AgentSessionShell>
+    );
+  }
 
   return (
     <main className="guided-shell">
@@ -2407,6 +2489,24 @@ export default function HomePage() {
               any comfortable stereo headphones. Set a comfortable listening
               level before you begin.
             </p>
+            <div className="agent-ready-lockup">
+              <span
+                className="agent-ready-badge"
+                tabIndex={0}
+                aria-describedby="agent-ready-help"
+              >
+                <span aria-hidden="true">AR</span>
+                Agentic ready
+              </span>
+              <span
+                id="agent-ready-help"
+                className="agent-ready-tooltip"
+                role="tooltip"
+              >
+                Ask your agent to guide you on this website. This badge never
+                activates agent mode by itself.
+              </span>
+            </div>
             <p className="limitation">
               Built to help families understand an everyday listening
               experience—not to diagnose hearing or recommend treatment.
