@@ -6,6 +6,13 @@ import {
   type ModelExplanationRequest,
   type ModelExplanationResponse,
 } from "../contracts/runtime";
+import type {
+  AuralisToolName,
+  ComparisonProjection,
+  ObservationProjection,
+  ProfileId,
+  SessionEvidenceEvent,
+} from "../contracts/webmcp";
 import {
   FREQUENCY_KEYS,
   MANUAL_PROFILE_ENTRY_LABEL,
@@ -124,6 +131,39 @@ export type ValidatedFailure = Readonly<{
   message: string;
 }>;
 
+export type WebMcpRequestRecord = Readonly<{
+  requestId: string;
+  tool: AuralisToolName;
+  canonicalInput: string;
+  data: unknown;
+}>;
+
+export type WebMcpPendingPlayback = Readonly<{
+  comparisonId: ComparisonProjection["comparisonId"];
+  mode: ExperienceComparisonMode;
+}>;
+
+export type WebMcpSessionState = Readonly<{
+  sessionId: string;
+  goal: "family-understanding";
+  stagedProfileId: ProfileId;
+  confirmedProfileId: ProfileId | null;
+  consentConfirmed: boolean;
+  stageCount: 1 | 2;
+  comparisons: readonly ComparisonProjection[];
+  observations: readonly ObservationProjection[];
+  events: readonly SessionEvidenceEvent[];
+  pendingPlayback: WebMcpPendingPlayback | null;
+  completionState: "active" | "ready_for_summary" | "complete";
+}>;
+
+export type WebMcpExperienceSlice = Readonly<{
+  revision: number;
+  humanJourneyProgressed: boolean;
+  session: WebMcpSessionState | null;
+  requestRecords: readonly WebMcpRequestRecord[];
+}>;
+
 export type ExperienceState = Readonly<{
   selectedProfileEntry: ProfileEntryOption;
   manualDraft: ManualAudiogramDraft;
@@ -148,6 +188,7 @@ export type ExperienceState = Readonly<{
   modelState: ModelState;
   completionState: ExperienceCompletionState;
   failure: ValidatedFailure | null;
+  webMcp: WebMcpExperienceSlice;
 }>;
 
 export type ExperienceAction =
@@ -209,6 +250,40 @@ export type ExperienceAction =
   | Readonly<{ type: "experience-completed" }>
   | Readonly<{ type: "comparison-reset" }>
   | Readonly<{
+      type: "webmcp-session-staged";
+      sessionId: string;
+      profileId: ProfileId;
+      requestRecord: WebMcpRequestRecord;
+      event: SessionEvidenceEvent;
+    }>
+  | Readonly<{
+      type: "webmcp-human-consent-confirmed";
+      event: SessionEvidenceEvent;
+    }>
+  | Readonly<{
+      type: "webmcp-human-profile-confirmed";
+      sourceIdentity: string;
+      event: SessionEvidenceEvent;
+    }>
+  | Readonly<{
+      type: "webmcp-comparison-prepared";
+      comparison: ComparisonProjection;
+      requestRecord: WebMcpRequestRecord;
+      event: SessionEvidenceEvent;
+    }>
+  | Readonly<{
+      type: "webmcp-observation-recorded";
+      observation: ObservationProjection;
+      requestRecord: WebMcpRequestRecord;
+      event: SessionEvidenceEvent;
+      completionState: "active" | "ready_for_summary";
+    }>
+  | Readonly<{
+      type: "webmcp-human-session-finished";
+      event: SessionEvidenceEvent;
+    }>
+  | Readonly<{ type: "webmcp-human-reset" }>
+  | Readonly<{
       type: "operation-failed";
       code: Exclude<ValidatedFailureCode, "invalid-profile" | "invalid-transition" | "stale-transition">;
       mode?: ComparisonMode;
@@ -245,6 +320,14 @@ const stoppedPlayback = (): PlaybackState =>
 const idleModelState = (): ModelState =>
   Object.freeze({ status: "idle" as const });
 
+const initialWebMcpSlice = (revision = 0): WebMcpExperienceSlice =>
+  Object.freeze({
+    revision,
+    humanJourneyProgressed: false,
+    session: null,
+    requestRecords: Object.freeze([]),
+  });
+
 export function createInitialExperienceState(): ExperienceState {
   return Object.freeze({
     selectedProfileEntry: "manual" as const,
@@ -265,6 +348,7 @@ export function createInitialExperienceState(): ExperienceState {
     modelState: idleModelState(),
     completionState: "in-progress" as const,
     failure: null,
+    webMcp: initialWebMcpSlice(),
   });
 }
 
@@ -478,7 +562,7 @@ function confirmProfile(
   });
 }
 
-export function experienceReducer(
+function reduceExperienceState(
   state: ExperienceState,
   action: ExperienceAction,
 ): ExperienceState {
@@ -965,6 +1049,195 @@ export function experienceReducer(
       });
     }
 
+    case "webmcp-session-staged": {
+      const currentSession = state.webMcp.session;
+      const session: WebMcpSessionState = currentSession
+        ? Object.freeze({
+            ...currentSession,
+            stagedProfileId: action.profileId,
+            stageCount: 2 as const,
+            events: Object.freeze([...currentSession.events, action.event]),
+          })
+        : Object.freeze({
+            sessionId: action.sessionId,
+            goal: "family-understanding" as const,
+            stagedProfileId: action.profileId,
+            confirmedProfileId: null,
+            consentConfirmed: false,
+            stageCount: 1 as const,
+            comparisons: Object.freeze([]),
+            observations: Object.freeze([]),
+            events: Object.freeze([action.event]),
+            pendingPlayback: null,
+            completionState: "active" as const,
+          });
+
+      return Object.freeze({
+        ...state,
+        webMcp: Object.freeze({
+          ...state.webMcp,
+          session,
+          requestRecords: Object.freeze([
+            ...state.webMcp.requestRecords,
+            action.requestRecord,
+          ]),
+        }),
+        failure: null,
+      });
+    }
+
+    case "webmcp-human-consent-confirmed": {
+      const session = state.webMcp.session;
+      if (!session || session.consentConfirmed) {
+        return rejectTransition(state, "invalid-transition");
+      }
+
+      return Object.freeze({
+        ...state,
+        webMcp: Object.freeze({
+          ...state.webMcp,
+          session: Object.freeze({
+            ...session,
+            consentConfirmed: true,
+            events: Object.freeze([...session.events, action.event]),
+          }),
+        }),
+        failure: null,
+      });
+    }
+
+    case "webmcp-human-profile-confirmed": {
+      const session = state.webMcp.session;
+      if (
+        !session ||
+        !session.consentConfirmed ||
+        session.confirmedProfileId !== null ||
+        state.playback.status === "playing"
+      ) {
+        return rejectTransition(state, "invalid-transition");
+      }
+
+      const profile = confirmPredefinedProfile(
+        session.stagedProfileId,
+        state.draftRevision,
+      );
+      const confirmed = confirmProfile(state, profile, action.sourceIdentity);
+
+      return Object.freeze({
+        ...confirmed,
+        selectedProfileEntry: session.stagedProfileId,
+        webMcp: Object.freeze({
+          ...confirmed.webMcp,
+          session: Object.freeze({
+            ...session,
+            confirmedProfileId: session.stagedProfileId,
+            events: Object.freeze([...session.events, action.event]),
+          }),
+        }),
+        failure: null,
+      });
+    }
+
+    case "webmcp-comparison-prepared": {
+      const session = state.webMcp.session;
+      if (!session) {
+        return rejectTransition(state, "invalid-transition");
+      }
+
+      return Object.freeze({
+        ...state,
+        supportMode: action.comparison.settings.supportMode,
+        interventionState: action.comparison.settings.televisionState,
+        speakerPositionState: action.comparison.settings.speakerPosition,
+        renders: idleRenders(),
+        playback: stoppedPlayback(),
+        ...invalidatedModelAndCompletionState(state),
+        webMcp: Object.freeze({
+          ...state.webMcp,
+          session: Object.freeze({
+            ...session,
+            comparisons: Object.freeze([
+              ...session.comparisons,
+              action.comparison,
+            ]),
+            pendingPlayback: null,
+            events: Object.freeze([...session.events, action.event]),
+          }),
+          requestRecords: Object.freeze([
+            ...state.webMcp.requestRecords,
+            action.requestRecord,
+          ]),
+        }),
+        failure: null,
+      });
+    }
+
+    case "webmcp-observation-recorded": {
+      const session = state.webMcp.session;
+      if (!session) {
+        return rejectTransition(state, "invalid-transition");
+      }
+
+      return Object.freeze({
+        ...state,
+        webMcp: Object.freeze({
+          ...state.webMcp,
+          session: Object.freeze({
+            ...session,
+            comparisons: Object.freeze(
+              session.comparisons.map((comparison) =>
+                comparison.comparisonId === action.observation.comparisonId
+                  ? Object.freeze({
+                      ...comparison,
+                      observationId: action.observation.observationId,
+                    })
+                  : comparison,
+              ),
+            ),
+            observations: Object.freeze([
+              ...session.observations,
+              action.observation,
+            ]),
+            completionState: action.completionState,
+            events: Object.freeze([...session.events, action.event]),
+          }),
+          requestRecords: Object.freeze([
+            ...state.webMcp.requestRecords,
+            action.requestRecord,
+          ]),
+        }),
+        failure: null,
+      });
+    }
+
+    case "webmcp-human-session-finished": {
+      const session = state.webMcp.session;
+      if (!session || session.completionState !== "ready_for_summary") {
+        return rejectTransition(state, "invalid-transition");
+      }
+
+      return Object.freeze({
+        ...state,
+        webMcp: Object.freeze({
+          ...state.webMcp,
+          session: Object.freeze({
+            ...session,
+            completionState: "complete" as const,
+            events: Object.freeze([...session.events, action.event]),
+          }),
+        }),
+        failure: null,
+      });
+    }
+
+    case "webmcp-human-reset": {
+      return Object.freeze({
+        ...createInitialExperienceState(),
+        modelGroundingRevision: state.modelGroundingRevision + 1,
+        modelAttemptsUsed: state.modelAttemptsUsed,
+      });
+    }
+
     case "operation-failed": {
       return Object.freeze({
         ...state,
@@ -991,6 +1264,337 @@ export function experienceReducer(
       });
     }
   }
+}
+
+const semanticStateKeys = [
+  "selectedProfileEntry",
+  "manualDraft",
+  "draftRevision",
+  "lastEdit",
+  "confirmedProfile",
+  "comparisonPlan",
+  "supportMode",
+  "interventionState",
+  "speakerPositionState",
+  "source",
+  "renders",
+  "lowVolumeAcknowledged",
+  "playback",
+  "modelGroundingRevision",
+  "modelAttemptsUsed",
+  "modelState",
+  "completionState",
+] as const satisfies readonly (keyof ExperienceState)[];
+
+function rawSemanticStateChanged(
+  previous: ExperienceState,
+  next: ExperienceState,
+): boolean {
+  return semanticStateKeys.some((key) => previous[key] !== next[key]);
+}
+
+function evidenceEvent(
+  session: WebMcpSessionState,
+  revision: number,
+  action: SessionEvidenceEvent["action"],
+  comparisonId: SessionEvidenceEvent["comparisonId"] = null,
+): SessionEvidenceEvent {
+  return Object.freeze({
+    sequence: session.events.length + 1,
+    revision,
+    actor: "human" as const,
+    action,
+    requestId: null,
+    comparisonId,
+  });
+}
+
+function sessionAfterHumanTransition(
+  previous: ExperienceState,
+  next: ExperienceState,
+  action: ExperienceAction,
+  revision: number,
+): WebMcpSessionState | null {
+  let session = next.webMcp.session;
+  if (!session) {
+    return null;
+  }
+
+  if (
+    action.type === "profile-entry-selected" ||
+    action.type === "manual-value-changed" ||
+    action.type === "manual-profile-confirmed"
+  ) {
+    return null;
+  }
+
+  if (action.type === "predefined-profile-confirmed") {
+    if (
+      action.profileId !== session.stagedProfileId ||
+      next.confirmedProfile?.predefinedProfileId !== action.profileId
+    ) {
+      return null;
+    }
+
+    if (session.confirmedProfileId === null) {
+      session = Object.freeze({
+        ...session,
+        confirmedProfileId: action.profileId,
+        events: Object.freeze([
+          ...session.events,
+          evidenceEvent(session, revision, "profile_confirmed"),
+        ]),
+      });
+    }
+  }
+
+  if (
+    action.type === "source-ready" &&
+    !session.events.some((event) => event.action === "scene_loaded")
+  ) {
+    session = Object.freeze({
+      ...session,
+      events: Object.freeze([
+        ...session.events,
+        evidenceEvent(session, revision, "scene_loaded"),
+      ]),
+    });
+  }
+
+  if (
+    action.type === "low-volume-acknowledgement-changed" &&
+    action.acknowledged &&
+    !session.events.some((event) => event.action === "volume_acknowledged")
+  ) {
+    session = Object.freeze({
+      ...session,
+      events: Object.freeze([
+        ...session.events,
+        evidenceEvent(session, revision, "volume_acknowledged"),
+      ]),
+    });
+  }
+
+  if (action.type === "playback-started") {
+    const comparison = session.comparisons.at(-1) ?? null;
+    if (
+      comparison &&
+      !comparison.heardPlaybackModes.includes(action.mode) &&
+      !session.pendingPlayback
+    ) {
+      session = Object.freeze({
+        ...session,
+        pendingPlayback: Object.freeze({
+          comparisonId: comparison.comparisonId,
+          mode: action.mode,
+        }),
+        events: Object.freeze([
+          ...session.events,
+          evidenceEvent(
+            session,
+            revision,
+            "playback_started",
+            comparison.comparisonId,
+          ),
+        ]),
+      });
+    }
+  }
+
+  if (
+    (action.type === "playback-stopped" || action.type === "playback-ended") &&
+    session.pendingPlayback
+  ) {
+    const pending = session.pendingPlayback;
+    session = Object.freeze({
+      ...session,
+      comparisons: Object.freeze(
+        session.comparisons.map((comparison) =>
+          comparison.comparisonId === pending.comparisonId &&
+          !comparison.heardPlaybackModes.includes(pending.mode)
+            ? Object.freeze({
+                ...comparison,
+                heardPlaybackModes: Object.freeze([
+                  ...comparison.heardPlaybackModes,
+                  pending.mode,
+                ]),
+              })
+            : comparison,
+        ),
+      ),
+      pendingPlayback: null,
+    });
+  }
+
+  if (
+    action.type === "experience-completed" &&
+    session.completionState === "ready_for_summary"
+  ) {
+    session = Object.freeze({
+      ...session,
+      completionState: "complete" as const,
+      events: Object.freeze([
+        ...session.events,
+        evidenceEvent(session, revision, "session_finished"),
+      ]),
+    });
+  }
+
+  return session;
+}
+
+function isWebMcpToolAction(action: ExperienceAction): boolean {
+  return (
+    action.type === "webmcp-session-staged" ||
+    action.type === "webmcp-comparison-prepared" ||
+    action.type === "webmcp-observation-recorded"
+  );
+}
+
+export function experienceReducer(
+  state: ExperienceState,
+  action: ExperienceAction,
+): ExperienceState {
+  const reduced = reduceExperienceState(state, action);
+  const toolAction = isWebMcpToolAction(action);
+  const webMcpChanged = reduced.webMcp !== state.webMcp;
+  const semanticChanged = rawSemanticStateChanged(state, reduced) || webMcpChanged;
+
+  if (!semanticChanged) {
+    return reduced;
+  }
+
+  const revision = state.webMcp.revision + 1;
+  if (
+    revision > Number.MAX_SAFE_INTEGER ||
+    revision > 2_147_483_647
+  ) {
+    return Object.freeze({
+      ...state,
+      failure: failure("invalid-transition"),
+    });
+  }
+
+  const reset =
+    action.type === "comparison-reset" || action.type === "webmcp-human-reset";
+  const session = reset
+    ? null
+    : toolAction || action.type.startsWith("webmcp-")
+      ? reduced.webMcp.session
+      : sessionAfterHumanTransition(state, reduced, action, revision);
+
+  return Object.freeze({
+    ...reduced,
+    webMcp: Object.freeze({
+      revision,
+      humanJourneyProgressed: reset
+        ? false
+        : toolAction
+          ? state.webMcp.humanJourneyProgressed
+          : true,
+      session,
+      requestRecords: reset
+        ? Object.freeze([])
+        : reduced.webMcp.requestRecords,
+    }),
+  });
+}
+
+export function isPristineForAgentStage(state: ExperienceState): boolean {
+  return (
+    state.webMcp.session === null &&
+    !state.webMcp.humanJourneyProgressed &&
+    state.confirmedProfile === null &&
+    state.comparisonPlan === null &&
+    state.source.status === "idle" &&
+    state.renders.reference.status === "idle" &&
+    state.renders.simulated.status === "idle" &&
+    !state.lowVolumeAcknowledged &&
+    state.playback.status === "stopped" &&
+    state.modelState.status === "idle" &&
+    state.completionState === "in-progress"
+  );
+}
+
+export type ExperienceSemanticCommand = (
+  current: ExperienceState,
+) => ExperienceState;
+
+export type ExperienceCommitResult =
+  | Readonly<{
+      ok: true;
+      changed: boolean;
+      snapshot: ExperienceState;
+    }>
+  | Readonly<{
+      ok: false;
+      changed: false;
+      reason: "reentrant" | "command-failed";
+      snapshot: ExperienceState;
+    }>;
+
+export type ExperienceController = Readonly<{
+  getSnapshot(): ExperienceState;
+  subscribe(listener: (snapshot: ExperienceState) => void): () => void;
+  commit(command: ExperienceSemanticCommand): ExperienceCommitResult;
+}>;
+
+export function createExperienceController(
+  initialState: ExperienceState = createInitialExperienceState(),
+): ExperienceController {
+  let snapshot = initialState;
+  let committing = false;
+  const listeners = new Set<(snapshot: ExperienceState) => void>();
+
+  return Object.freeze({
+    getSnapshot: () => snapshot,
+    subscribe: (listener: (next: ExperienceState) => void) => {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    commit: (command: ExperienceSemanticCommand): ExperienceCommitResult => {
+      if (committing) {
+        return Object.freeze({
+          ok: false as const,
+          changed: false as const,
+          reason: "reentrant" as const,
+          snapshot,
+        });
+      }
+
+      committing = true;
+      try {
+        const next = command(snapshot);
+        const changed = next !== snapshot;
+        if (changed) {
+          snapshot = next;
+          for (const listener of listeners) {
+            try {
+              listener(snapshot);
+            } catch {
+              // Notification failures cannot turn an already committed snapshot
+              // into a false command failure or roll semantic state back.
+            }
+          }
+        }
+
+        return Object.freeze({
+          ok: true as const,
+          changed,
+          snapshot,
+        });
+      } catch {
+        return Object.freeze({
+          ok: false as const,
+          changed: false as const,
+          reason: "command-failed" as const,
+          snapshot,
+        });
+      } finally {
+        committing = false;
+      }
+    },
+  });
 }
 
 export type VisibleExperienceState = Readonly<{
