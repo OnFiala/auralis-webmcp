@@ -123,8 +123,8 @@ The WebMCP extension adds:
 
 | Phase | Public result | Status |
 |---|---|---|
-| BUILD-1 | Deterministic domain contract, state transitions, errors, evidence, and focused tests. | Reviewed source available; not yet present on the public lineage. |
-| BUILD-2 | Feature-detected browser registration, shared commit gateway, and adapter tests. | Reviewed source available; not yet present on the public lineage. |
+| BUILD-1 | Deterministic domain contract, state transitions, errors, evidence, and focused tests. | Implemented on this branch; focused WebMCP tests passed before this documentation update. Final clean-clone and runtime verification remain pending. |
+| BUILD-2 | Feature-detected browser registration, shared commit gateway, and adapter tests. | Implemented on this branch; focused WebMCP tests passed before this documentation update. Final clean-clone and runtime verification remain pending. |
 | BUILD-3A | Structural Agent Reveal, visible human gates, current state, and next action. | Not started. |
 | VERIFY-1 | Real-browser WebMCP journey, human fallback, negative gates, accessibility, and failure paths. | Not started. |
 | DESIGN-1 | Three visual directions generated from verified final-state screenshots. | Not started. |

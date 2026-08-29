@@ -10,6 +10,22 @@ Auralis is an educational, non-clinical experience. It does not diagnose hearing
 - **Runtime implementation baseline:** [`384ece76a29ab4f3c82e69e1bc1c585044d82c29`](https://github.com/OnFiala/auralis-build-week-2026/commit/384ece76a29ab4f3c82e69e1bc1c585044d82c29)
 - **OpenAI API key:** optional; the complete deterministic journey works without one
 
+## WebMCP extension
+
+This feature branch adds the deterministic WebMCP foundation for an agent-guided Auralis session while preserving the complete human journey.
+
+The implemented foundation includes:
+
+- five narrow semantic tools for state, synthetic-profile staging, one-variable comparison preparation, structured observations, and minimized session evidence;
+- thirteen explicit phases and seven human-authority gates;
+- stale-revision and request-replay protection;
+- feature-detected browser registration through the application's existing state and validation logic;
+- focused domain and browser-adapter tests.
+
+Pure human browsing remains on the human landing page. Agent Reveal can begin only through the first successful session-staging tool call. WebMCP tools cannot confirm consent or profile choice, load audio, acknowledge volume, start playback, finish, reset, export, or override Stop.
+
+The structural Agent Reveal UI, real-agent browser journey, visual update, public Preview, and production promotion remain later verified phases. See [`docs/WEBMCP_PLAN.md`](docs/WEBMCP_PLAN.md) for the public delivery contract and current status.
+
 ## What the experience contains
 
 The product has one guided journey:
@@ -132,8 +148,11 @@ npx playwright install chromium
 Run the complete repository check:
 
 ```bash
+npm run test:webmcp
 npm run check
 ```
+
+`npm run test:webmcp` currently runs separately from the aggregate command and covers the deterministic WebMCP domain and browser adapter. VERIFY-1 will add the real-browser WebMCP journey before extending the aggregate command.
 
 `npm run check` runs, in order:
 
@@ -216,6 +235,7 @@ docs/                        Frozen product and competition authority
 - Canonical application: [https://auralis-build-week-2026.vercel.app](https://auralis-build-week-2026.vercel.app)
 - Production root and `/api/health`: HTTP 200, verified 21 July 2026
 - Public model mode: optional explanation truthfully Degrades because no shared key is configured
+- WebMCP foundation: implemented on this feature branch; final clean-clone, real-agent browser, Preview, and production verification remain pending
 
 ## Project authority
 

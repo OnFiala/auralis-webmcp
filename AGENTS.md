@@ -36,6 +36,12 @@ This `AGENTS.md` governs agent behavior and project process. It must not be used
 
 If a current primary source conflicts with a frozen repository source, stop, identify the exact conflict and impact, and request an explicit human decision.
 
+### 2.1 Auralis WebMCP public delivery authority
+
+For the Auralis WebMCP extension, `docs/WEBMCP_PLAN.md` is the subordinate public product and delivery contract. It defines the agent-guided product flow, tool and state contracts, human gates, implementation phases, acceptance evidence, rollback, and release boundaries.
+
+The WebMCP plan may not override competition rules, the authority hierarchy above, immutable baseline files, protected-file rules, human decision authority, or publication gates. Runtime code and tests remain the implementation source of truth. If the public plan, runtime, tests, or a higher authority conflict, stop and request an explicit human decision.
+
 ## 3. Locked and immutable files
 
 Treat these files as immutable baseline snapshots:
