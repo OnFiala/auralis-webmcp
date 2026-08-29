@@ -123,9 +123,9 @@ The WebMCP extension adds:
 
 | Phase | Public result | Status |
 |---|---|---|
-| BUILD-1 | Deterministic domain contract, state transitions, errors, evidence, and focused tests. | Implemented on this branch; focused WebMCP tests passed before this documentation update. Final clean-clone and runtime verification remain pending. |
-| BUILD-2 | Feature-detected browser registration, shared commit gateway, and adapter tests. | Implemented on this branch; focused WebMCP tests passed before this documentation update. Final clean-clone and runtime verification remain pending. |
-| BUILD-3A | Structural Agent Reveal, visible human gates, current state, and next action. | Not started. |
+| BUILD-1 | Deterministic domain contract, state transitions, errors, evidence, and focused tests. | Implemented; clean-clone contract tests passed. |
+| BUILD-2 | Feature-detected browser registration, shared commit gateway, and adapter tests. | Implemented; clean-clone adapter and registration tests passed. |
+| BUILD-3A | Structural Agent Reveal, visible human gates, current state, and next action. | Implemented at `6b18563373ef1279bc1639525e952b86b0dc18d2`; clean Linux build, mocked WebMCP host journey, reduced-motion, Stop, reset, smoke, and existing human journeys passed. Real external-agent and voice proof remain VERIFY work. |
 | VERIFY-1 | Real-browser WebMCP journey, human fallback, negative gates, accessibility, and failure paths. | Not started. |
 | DESIGN-1 | Three visual directions generated from verified final-state screenshots. | Not started. |
 | VISUAL-UPDATE | One selected complete visual system for human and agent-guided modes. | Not started. |
@@ -176,6 +176,7 @@ Public commits are small and meaningful:
 2. `feat(webmcp): add deterministic domain contract`
 3. `feat(webmcp): register browser tools`
 4. `docs(webmcp): publish build-2 implementation map`
+5. `feat(webmcp): add structural agent reveal`
 
 The public branch starts from the live public `main`. Only the explicitly reviewed branch ref is pushed. Broad ref pushes are not used.
 
