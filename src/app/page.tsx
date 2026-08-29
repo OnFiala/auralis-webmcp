@@ -1,7 +1,13 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useReducer, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { flushSync } from "react-dom";
 
 import {
@@ -12,18 +18,20 @@ import {
 } from "../browser/audio";
 import { downloadAttributableEvidence } from "../browser/evidence";
 import { requestLiveExplanation } from "../browser/model-client";
+import { registerAuralisWebMcpTools } from "../browser/webmcp";
 import { MAX_MODEL_ATTEMPTS_PER_SESSION } from "../contracts/runtime";
 import {
   canCompleteExperience,
   canRequestModelExplanation,
   comparisonResultIdentity,
-  createInitialExperienceState,
+  createExperienceController,
   createModelExplanationRequest,
   currentTransformedResult,
   experienceReducer,
   projectAttributableEvidence,
   projectTerminalCompletion,
   projectVisibleExperienceState,
+  type ExperienceAction,
   type ExperienceComparisonMode,
   type ExperienceInterventionState,
   type ExperienceSpeakerPositionState,
@@ -465,9 +473,17 @@ export default function HomePage() {
   const [sceneTranscript, setSceneTranscript] = useState<
     readonly SceneTranscriptEntry[]
   >([]);
-  const [experience, dispatch] = useReducer(
-    experienceReducer,
-    createInitialExperienceState(),
+  const [experienceController] = useState(() => createExperienceController());
+  const experience = useSyncExternalStore(
+    experienceController.subscribe,
+    experienceController.getSnapshot,
+    experienceController.getSnapshot,
+  );
+  const dispatch = useCallback(
+    (action: ExperienceAction) => {
+      experienceController.commit((state) => experienceReducer(state, action));
+    },
+    [experienceController],
   );
   const audioEngineRef = useRef<BrowserAudioEngine | null>(null);
   const screenHeadingRef = useRef<HTMLHeadingElement | null>(null);
@@ -559,6 +575,13 @@ export default function HomePage() {
         : simulatedReady
           ? "ready"
           : "stale";
+
+  useEffect(() => {
+    const binding = registerAuralisWebMcpTools({
+      controller: experienceController,
+    });
+    return () => binding.dispose();
+  }, [experienceController]);
 
   useEffect(
     () => () => {
