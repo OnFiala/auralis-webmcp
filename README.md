@@ -24,7 +24,7 @@ The implemented foundation includes:
 
 Pure human browsing remains on the human landing page. Agent Reveal can begin only through the first successful session-staging tool call. WebMCP tools cannot confirm consent or profile choice, load audio, acknowledge volume, start playback, finish, reset, export, or override Stop.
 
-The structural Agent Reveal UI, real-agent browser journey, visual update, public Preview, and production promotion remain later verified phases. See [`docs/WEBMCP_PLAN.md`](docs/WEBMCP_PLAN.md) for the public delivery contract and current status.
+The structural Agent Reveal UI is implemented and clean-candidate verified. Real-agent and voice journeys, the final visual update, dependency remediation, and production promotion remain later verified phases. See [`docs/WEBMCP_PLAN.md`](docs/WEBMCP_PLAN.md) for the public delivery contract and current status.
 
 ## What the experience contains
 
@@ -235,7 +235,7 @@ docs/                        Frozen product and competition authority
 - Canonical application: [https://auralis-build-week-2026.vercel.app](https://auralis-build-week-2026.vercel.app)
 - Production root and `/api/health`: HTTP 200, verified 21 July 2026
 - Public model mode: optional explanation truthfully Degrades because no shared key is configured
-- WebMCP foundation: implemented on this feature branch; final clean-clone, real-agent browser, Preview, and production verification remain pending
+- WebMCP BUILD-1, BUILD-2, and structural BUILD-3A: implemented and clean-candidate verified on the public feature branch; real-agent, voice, dependency-remediation, and production verification remain pending
 
 ## Project authority
 

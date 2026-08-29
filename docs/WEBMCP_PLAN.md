@@ -117,7 +117,7 @@ The WebMCP extension adds:
 - one-variable adaptive comparisons;
 - minimized attributable evidence;
 - browser tool registration;
-- the future Agent Reveal UI and agent-guided visual structure.
+- the structural Agent Reveal UI and agent-guided information architecture.
 
 ## Delivery phases
 
@@ -177,6 +177,8 @@ Public commits are small and meaningful:
 3. `feat(webmcp): register browser tools`
 4. `docs(webmcp): publish build-2 implementation map`
 5. `feat(webmcp): add structural agent reveal`
+6. `docs(webmcp): record build-3a acceptance`
+7. `docs(webmcp): align build-3a public status`
 
 The public branch starts from the live public `main`. Only the explicitly reviewed branch ref is pushed. Broad ref pushes are not used.
 
