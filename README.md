@@ -148,21 +148,22 @@ npx playwright install chromium
 Run the complete repository check:
 
 ```bash
-npm run test:webmcp
 npm run check
 ```
 
-`npm run test:webmcp` currently runs separately from the aggregate command and covers the deterministic WebMCP domain and browser adapter. VERIFY-1 will add the real-browser WebMCP journey before extending the aggregate command.
+The aggregate command includes the deterministic WebMCP unit and browser-adapter suite plus the automated Chromium WebMCP journey. The narrower `npm run test:webmcp` and `npm run test:webmcp:journey` commands remain available for focused diagnosis.
 
 `npm run check` runs, in order:
 
 1. `npm run typecheck`
 2. `npm run check:deps`
 3. `npm run test:core`
-4. `npm run test:model`
-5. `npm run build`
-6. `npm run test:smoke`
-7. `npm run test:journey`
+4. `npm run test:webmcp`
+5. `npm run test:model`
+6. `npm run build`
+7. `npm run test:smoke`
+8. `npm run test:journey`
+9. `npm run test:webmcp:journey`
 
 The Playwright configuration starts the already-built production application on `127.0.0.1:3000` when `PLAYWRIGHT_BASE_URL` is unset. Run `npm run build` first when invoking a Playwright script individually against that local server.
 
@@ -235,7 +236,7 @@ docs/                        Frozen product and competition authority
 - Canonical application: [https://auralis-build-week-2026.vercel.app](https://auralis-build-week-2026.vercel.app)
 - Production root and `/api/health`: HTTP 200, verified 21 July 2026
 - Public model mode: optional explanation truthfully Degrades because no shared key is configured
-- WebMCP BUILD-1, BUILD-2, and structural BUILD-3A: implemented and clean-candidate verified on the public feature branch; real-agent, voice, dependency-remediation, and production verification remain pending
+- WebMCP BUILD-1, BUILD-2, structural BUILD-3A, and automated VERIFY-1: implemented and clean-candidate verified on the public feature branch; native external-agent, voice, dependency-remediation, and production verification remain pending
 
 ## Project authority
 

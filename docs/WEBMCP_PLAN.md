@@ -126,7 +126,8 @@ The WebMCP extension adds:
 | BUILD-1 | Deterministic domain contract, state transitions, errors, evidence, and focused tests. | Implemented; clean-clone contract tests passed. |
 | BUILD-2 | Feature-detected browser registration, shared commit gateway, and adapter tests. | Implemented; clean-clone adapter and registration tests passed. |
 | BUILD-3A | Structural Agent Reveal, visible human gates, current state, and next action. | Implemented at `6b18563373ef1279bc1639525e952b86b0dc18d2`; clean Linux build, mocked WebMCP host journey, reduced-motion, Stop, reset, smoke, and existing human journeys passed. Real external-agent and voice proof remain VERIFY work. |
-| VERIFY-1 | Real-browser WebMCP journey, human fallback, negative gates, accessibility, and failure paths. | Not started. |
+| VERIFY-1 | Automated real-browser WebMCP journey, human fallback, negative gates, accessibility, and failure paths. | Implemented and independently reviewed at `c08ddf3fa53ebe77d814fbe19f4a4025ea93daa9`; aggregate validation passed with six Chromium WebMCP journeys and zero model-route calls. |
+| VERIFY-0 | Native site-tool discovery and the intended typed and voice agent control in the supported desktop host. | Not started. Requires an exact public Preview and direct runtime evidence; mock-host tests do not satisfy this gate. |
 | DESIGN-1 | Three visual directions generated from verified final-state screenshots. | Not started. |
 | VISUAL-UPDATE | One selected complete visual system for human and agent-guided modes. | Not started. |
 | RELEASE | Public history, public deployment, demo evidence, and submission package. | Not started. |
@@ -155,7 +156,7 @@ npm run test:webmcp
 npm run check
 ```
 
-`npm run test:webmcp` is explicit because the current aggregate `check` command does not include it yet. VERIFY-1 will add the real-browser WebMCP journey and then extend the aggregate command.
+`npm run check` now includes the deterministic WebMCP unit and adapter suite plus the six-scenario Chromium WebMCP journey. `npm run test:webmcp` and `npm run test:webmcp:journey` remain available as narrower diagnostic commands.
 
 Acceptance also requires:
 
@@ -179,6 +180,8 @@ Public commits are small and meaningful:
 5. `feat(webmcp): add structural agent reveal`
 6. `docs(webmcp): record build-3a acceptance`
 7. `docs(webmcp): align build-3a public status`
+8. `test(webmcp): add verified browser journey`
+9. `docs(webmcp): record verify-1 acceptance`
 
 The public branch starts from the live public `main`. Only the explicitly reviewed branch ref is pushed. Broad ref pushes are not used.
 
