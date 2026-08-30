@@ -1134,10 +1134,23 @@ describe("Auralis WebMCP deterministic domain contract", () => {
     const directController = baselineObservedController();
     const options = deriveValidAdaptationOptions(agentController.getSnapshot());
     expect(options.map((option) => [option.variable, option.value])).toEqual([
-      ["support_mode", "bilateral"],
       ["television_state", "tv-off"],
       ["speaker_position", "closer-in-front"],
+      ["support_mode", "left-one-sided"],
+      ["support_mode", "bilateral"],
     ]);
+    expect(getAuralisState(agentController)).toMatchObject({
+      ok: true,
+      phase: "ready_for_adaptation",
+      data: {
+        availableAdaptations: [
+          { variable: "television_state", value: "tv-off" },
+          { variable: "speaker_position", value: "closer-in-front" },
+          { variable: "support_mode", value: "left-one-sided" },
+          { variable: "support_mode", value: "bilateral" },
+        ],
+      },
+    });
 
     const option = options[1]!;
     const agent = prepareAdaptation(
@@ -1159,6 +1172,36 @@ describe("Auralis WebMCP deterministic domain contract", () => {
     ).toEqual(
       directController.getSnapshot().webMcp.session?.comparisons.at(-1),
     );
+  });
+
+  it("keeps bilateral support after the smaller one-ear option", () => {
+    const controller = baselineObservedController();
+    expect(
+      prepareAdaptation(
+        controller,
+        "left-support-adaptation",
+        "support_mode",
+        "left-one-sided",
+      ).ok,
+    ).toBe(true);
+    play(controller, "simulated");
+    expect(
+      observe(controller, "observe-left-support", "comparison-2", {
+        relativeToPrevious: "better",
+        nextAction: "continue",
+      }).ok,
+    ).toBe(true);
+
+    expect(
+      deriveValidAdaptationOptions(controller.getSnapshot()).map((option) => [
+        option.variable,
+        option.value,
+      ]),
+    ).toEqual([
+      ["television_state", "tv-off"],
+      ["speaker_position", "closer-in-front"],
+      ["support_mode", "bilateral"],
+    ]);
   });
 
   it("requires adaptation observations to compare against the previous result", () => {

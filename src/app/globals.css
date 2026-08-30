@@ -4450,7 +4450,7 @@ main[data-agent-phase="awaiting_volume_acknowledgement"] .agent-session-footer {
 
 .agent-adaptation-options {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.7rem;
   margin-top: 0;
 }
@@ -5177,6 +5177,20 @@ main[data-agent-phase="awaiting_comparison_observation"] .agent-session-details 
 }
 
 @media (min-width: 1200px) {
+  .agent-adaptation-options {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .agent-adaptation-options article {
+    gap: 0.35rem;
+    padding: 0.75rem;
+  }
+
+  .agent-adaptation-options small {
+    font-size: 0.78rem;
+    line-height: 1.3;
+  }
+
   .agent-next-action {
     position: relative;
   }

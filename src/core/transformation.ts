@@ -9,6 +9,13 @@ import {
 } from "./profile";
 
 export const TRANSFORMATION_ALGORITHM_VERSION = "auralis-peaking-attenuation-v1";
+export const SOURCE_MIX_ALGORITHM_VERSION = "auralis-family-mix-v2";
+export const TELEVISION_MASKING_GAIN_DB = 6;
+export const TELEVISION_MASKING_GAIN_LINEAR =
+  10 ** (TELEVISION_MASKING_GAIN_DB / 20);
+export const SOURCE_MIX_HEADROOM_DB = -1.5;
+export const SOURCE_MIX_HEADROOM_LINEAR =
+  10 ** (SOURCE_MIX_HEADROOM_DB / 20);
 export const TRANSFORMATION_FILTER_Q = 1;
 export const TRANSFORMATION_DB_PER_DB_HL = -0.24;
 export const TRANSFORMATION_MIN_GAIN_DB = -24;
@@ -49,10 +56,10 @@ export type FocusedSpeechSpatialPlan = Readonly<{
 }>;
 
 export type SourceContributionPlan = Readonly<{
-  focusedSpeech: 1;
-  overlappingSpeech: 1;
-  television: 0 | 1;
-  kitchenRoom: 1;
+  focusedSpeech: number;
+  overlappingSpeech: number;
+  television: number;
+  kitchenRoom: number;
 }>;
 
 export type ReferenceResultPlan = Readonly<{
@@ -80,6 +87,9 @@ export type TransformedResultPlan = Readonly<{
 
 export type ComparisonPlan = Readonly<{
   algorithmVersion: typeof TRANSFORMATION_ALGORITHM_VERSION;
+  sourceMixAlgorithmVersion: typeof SOURCE_MIX_ALGORITHM_VERSION;
+  televisionMaskingGainDb: typeof TELEVISION_MASKING_GAIN_DB;
+  sourceMixHeadroomDb: typeof SOURCE_MIX_HEADROOM_DB;
   supportAlgorithmVersion: typeof SUPPORT_ALGORITHM_VERSION;
   speakerPositionAlgorithmVersion: typeof SPEAKER_POSITION_ALGORITHM_VERSION;
   sourceIdentity: string;
@@ -93,21 +103,22 @@ export type ComparisonPlan = Readonly<{
   limitation: "illustrative-non-clinical";
 }>;
 
-const DEFAULT_RESULT_STATE_SUFFIX =
-  "|intervention:tv-on|speaker-position:original-position";
+const SOURCE_MIX_IDENTITY_SUFFIX =
+  `|source-mix:${SOURCE_MIX_ALGORITHM_VERSION}|television-mask:${TELEVISION_MASKING_GAIN_DB.toFixed(1)}db|headroom:${SOURCE_MIX_HEADROOM_DB.toFixed(1)}db`;
+const DEFAULT_RESULT_STATE_SUFFIX = `${SOURCE_MIX_IDENTITY_SUFFIX}|intervention:tv-on|speaker-position:original-position`;
 
 const TV_ON_SOURCE_CONTRIBUTIONS: SourceContributionPlan = Object.freeze({
-  focusedSpeech: 1 as const,
-  overlappingSpeech: 1 as const,
-  television: 1 as const,
-  kitchenRoom: 1 as const,
+  focusedSpeech: SOURCE_MIX_HEADROOM_LINEAR,
+  overlappingSpeech: SOURCE_MIX_HEADROOM_LINEAR,
+  television: SOURCE_MIX_HEADROOM_LINEAR * TELEVISION_MASKING_GAIN_LINEAR,
+  kitchenRoom: SOURCE_MIX_HEADROOM_LINEAR,
 });
 
 const TV_OFF_SOURCE_CONTRIBUTIONS: SourceContributionPlan = Object.freeze({
-  focusedSpeech: 1 as const,
-  overlappingSpeech: 1 as const,
+  focusedSpeech: SOURCE_MIX_HEADROOM_LINEAR,
+  overlappingSpeech: SOURCE_MIX_HEADROOM_LINEAR,
   television: 0 as const,
-  kitchenRoom: 1 as const,
+  kitchenRoom: SOURCE_MIX_HEADROOM_LINEAR,
 });
 
 function clamp(value: number, minimum: number, maximum: number): number {
@@ -208,7 +219,7 @@ function resultStateIdentitySuffix(
   interventionState: InterventionState,
   speakerPositionState: SpeakerPositionState,
 ): string {
-  return `|intervention:${interventionState}|speaker-position:${speakerPositionState}`;
+  return `${SOURCE_MIX_IDENTITY_SUFFIX}|intervention:${interventionState}|speaker-position:${speakerPositionState}`;
 }
 
 function identityForResultState(
@@ -305,6 +316,9 @@ export function createComparisonPlan(
 
   const plan = Object.freeze({
     algorithmVersion: TRANSFORMATION_ALGORITHM_VERSION,
+    sourceMixAlgorithmVersion: SOURCE_MIX_ALGORITHM_VERSION,
+    televisionMaskingGainDb: TELEVISION_MASKING_GAIN_DB,
+    sourceMixHeadroomDb: SOURCE_MIX_HEADROOM_DB,
     supportAlgorithmVersion: SUPPORT_ALGORITHM_VERSION,
     speakerPositionAlgorithmVersion: SPEAKER_POSITION_ALGORITHM_VERSION,
     sourceIdentity,
@@ -475,6 +489,9 @@ export function assertValidComparisonPlan(plan: ComparisonPlan): void {
 
   if (
     plan.algorithmVersion !== TRANSFORMATION_ALGORITHM_VERSION ||
+    plan.sourceMixAlgorithmVersion !== SOURCE_MIX_ALGORITHM_VERSION ||
+    plan.televisionMaskingGainDb !== TELEVISION_MASKING_GAIN_DB ||
+    plan.sourceMixHeadroomDb !== SOURCE_MIX_HEADROOM_DB ||
     plan.supportAlgorithmVersion !== SUPPORT_ALGORITHM_VERSION ||
     plan.speakerPositionAlgorithmVersion !==
       SPEAKER_POSITION_ALGORITHM_VERSION ||

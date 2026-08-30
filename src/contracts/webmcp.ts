@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const AURALIS_WEBMCP_CONTRACT_VERSION = "auralis-webmcp-v1.3" as const;
+export const AURALIS_WEBMCP_CONTRACT_VERSION = "auralis-webmcp-v1.4" as const;
 export const AURALIS_WEBMCP_EVIDENCE_SCHEMA_VERSION =
   "auralis-webmcp-evidence-v3" as const;
 export const AURALIS_WEBMCP_LIMITATION =
@@ -687,7 +687,7 @@ export const getAuralisStateDataSchema = z
       })
       .strict(),
     currentComparison: comparisonProjectionSchema.nullable(),
-    availableAdaptations: z.array(adaptationOptionProjectionSchema).max(3),
+    availableAdaptations: z.array(adaptationOptionProjectionSchema).max(4),
     listeningGuidance: z
       .object({
         playbackTool: z.literal("play_listening_comparison"),

@@ -34,8 +34,13 @@ import {
   CLOSER_SPEAKER_DISTANCE_METERS,
   ORIGINAL_SPEAKER_AZIMUTH_DEGREES,
   ORIGINAL_SPEAKER_DISTANCE_METERS,
+  SOURCE_MIX_ALGORITHM_VERSION,
+  SOURCE_MIX_HEADROOM_DB,
+  SOURCE_MIX_HEADROOM_LINEAR,
   SPEAKER_POSITION_MAX_DISTANCE_GAIN_DB,
   SUPPORT_MAX_COMPENSATION_DB,
+  TELEVISION_MASKING_GAIN_DB,
+  TELEVISION_MASKING_GAIN_LINEAR,
   assertValidComparisonPlan,
   createComparisonPlan,
   focusedSpeechSpatialPlanForState,
@@ -601,25 +606,38 @@ describe("genuine support progression", () => {
 });
 
 describe("coherent TV-off intervention", () => {
-  it("removes only the television contribution and preserves the source plan", () => {
+  it("applies one broadband television masking gain and removes only that contribution", () => {
     const plan = createComparisonPlan(confirmedProfile(), SOURCE_IDENTITY);
     const referenceOn = referenceResultForIntervention(plan, "tv-on");
     const referenceOff = referenceResultForIntervention(plan, "tv-off");
 
+    expect(plan).toMatchObject({
+      sourceMixAlgorithmVersion: SOURCE_MIX_ALGORITHM_VERSION,
+      televisionMaskingGainDb: TELEVISION_MASKING_GAIN_DB,
+      sourceMixHeadroomDb: SOURCE_MIX_HEADROOM_DB,
+    });
+    expect(TELEVISION_MASKING_GAIN_DB).toBe(6);
+    expect(TELEVISION_MASKING_GAIN_LINEAR).toBeCloseTo(1.995262, 6);
+    expect(SOURCE_MIX_HEADROOM_DB).toBe(-1.5);
+    expect(SOURCE_MIX_HEADROOM_LINEAR).toBeCloseTo(0.841395, 6);
     expect(referenceOn.sourceContributions).toEqual({
-      focusedSpeech: 1,
-      overlappingSpeech: 1,
-      television: 1,
-      kitchenRoom: 1,
+      focusedSpeech: SOURCE_MIX_HEADROOM_LINEAR,
+      overlappingSpeech: SOURCE_MIX_HEADROOM_LINEAR,
+      television:
+        SOURCE_MIX_HEADROOM_LINEAR * TELEVISION_MASKING_GAIN_LINEAR,
+      kitchenRoom: SOURCE_MIX_HEADROOM_LINEAR,
     });
     expect(referenceOff.sourceContributions).toEqual({
-      focusedSpeech: 1,
-      overlappingSpeech: 1,
+      focusedSpeech: SOURCE_MIX_HEADROOM_LINEAR,
+      overlappingSpeech: SOURCE_MIX_HEADROOM_LINEAR,
       television: 0,
-      kitchenRoom: 1,
+      kitchenRoom: SOURCE_MIX_HEADROOM_LINEAR,
     });
     expect(referenceOff.sourceIdentity).toBe(referenceOn.sourceIdentity);
     expect(referenceOff.resultIdentity).not.toBe(referenceOn.resultIdentity);
+    expect(referenceOn.resultIdentity).toContain(SOURCE_MIX_ALGORITHM_VERSION);
+    expect(referenceOn.resultIdentity).toContain("television-mask:6.0db");
+    expect(referenceOn.resultIdentity).toContain("headroom:-1.5db");
 
     for (const supportMode of [
       "none",
@@ -636,7 +654,20 @@ describe("coherent TV-off intervention", () => {
       expect(tvOff.resultIdentity).not.toBe(tvOn.resultIdentity);
       expect(tvOff.leftFilters).toEqual(tvOn.leftFilters);
       expect(tvOff.rightFilters).toEqual(tvOn.rightFilters);
+      expect(tvOff.resultIdentity).toContain(SOURCE_MIX_ALGORITHM_VERSION);
+      expect(tvOff.resultIdentity).toContain("television-mask:6.0db");
+      expect(tvOff.resultIdentity).toContain("headroom:-1.5db");
     }
+
+    const closer = resultForSupportMode(
+      plan,
+      "none",
+      "tv-on",
+      "closer-in-front",
+    );
+    expect(closer.resultIdentity).toContain(SOURCE_MIX_ALGORITHM_VERSION);
+    expect(closer.resultIdentity).toContain("television-mask:6.0db");
+    expect(closer.resultIdentity).toContain("headroom:-1.5db");
   });
 
   it("is deterministic for every profile and support state", () => {

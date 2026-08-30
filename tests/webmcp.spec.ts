@@ -639,15 +639,22 @@ test("a staged WebMCP session preserves human gates and completes through browse
   });
   await expect(page.getByRole("heading", { name: "Choose one useful change" })).toBeFocused();
   await expect(page.locator(".agent-staged-action")).toHaveCount(0);
-  await expect(page.getByLabel("Available adaptation options").locator("article")).toHaveCount(3);
+  const adaptationOptions = page
+    .getByLabel("Available adaptation options")
+    .locator("article");
+  await expect(adaptationOptions).toHaveCount(4);
+  await expect(adaptationOptions.locator("h3")).toHaveText([
+    "Turn the television off",
+    "Move the speaker closer",
+    "Add left-ear illustrative support",
+    "Add bilateral illustrative support",
+  ]);
   await expect(page.locator(".agent-session-details")).toBeHidden();
   await expectPrimaryAgentContentCentered(page);
-  const adaptationOptionGeometry = await page
-    .getByLabel("Available adaptation options")
-    .locator("article")
-    .evaluateAll((cards) =>
+  const adaptationOptionGeometry = await adaptationOptions.evaluateAll(
+    (cards) =>
       cards.map((card) => card.getBoundingClientRect().height),
-    );
+  );
   expect(Math.max(...adaptationOptionGeometry)).toBeLessThanOrEqual(
     mobileDesignQaCapture ? 180 : 150,
   );
@@ -665,8 +672,8 @@ test("a staged WebMCP session preserves human gates and completes through browse
     requestId: "verify-support-adaptation",
     expectedRevision: baselineObservation.revision,
     kind: "adaptation",
-    variable: "support_mode",
-    value: "bilateral",
+    variable: "speaker_position",
+    value: "closer-in-front",
   });
   expect(adaptation).toMatchObject({
     ok: true,
@@ -675,11 +682,11 @@ test("a staged WebMCP session preserves human gates and completes through browse
       comparison: {
         comparisonId: "comparison-2",
         previousComparisonId: "comparison-1",
-        changedVariable: "support_mode",
+        changedVariable: "speaker_position",
         settings: {
-          supportMode: "bilateral",
+          supportMode: "none",
           televisionState: "tv-on",
-          speakerPosition: "original-position",
+          speakerPosition: "closer-in-front",
         },
         requiredPlaybackModes: ["simulated"],
         heardPlaybackModes: [],

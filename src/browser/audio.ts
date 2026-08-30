@@ -276,7 +276,7 @@ function metadataForBuffer(buffer: AudioBuffer): SourceBufferMetadata {
 function contributionForAsset(
   contributions: SourceContributionPlan,
   file: ManifestAsset["file"],
-): 0 | 1 {
+): number {
   switch (file) {
     case "focused-speech.wav":
       return contributions.focusedSpeech;
@@ -655,14 +655,11 @@ export class BrowserAudioEngine {
     const merger = context.createChannelMerger(2);
     const sources = source.buffers.flatMap((buffer, index) => {
       const asset = source.manifest.assets[index];
+      const contribution = asset
+        ? contributionForAsset(selectedResult.sourceContributions, asset.file)
+        : 0;
 
-      if (
-        !asset ||
-        contributionForAsset(
-          selectedResult.sourceContributions,
-          asset.file,
-        ) === 0
-      ) {
+      if (!asset || contribution === 0) {
         return [];
       }
 
@@ -673,16 +670,19 @@ export class BrowserAudioEngine {
         const leftSpatialGain = context.createGain();
         const rightSpatialGain = context.createGain();
         leftSpatialGain.gain.value =
-          selectedResult.focusedSpeechSpatial.leftChannelGain;
+          selectedResult.focusedSpeechSpatial.leftChannelGain * contribution;
         rightSpatialGain.gain.value =
-          selectedResult.focusedSpeechSpatial.rightChannelGain;
+          selectedResult.focusedSpeechSpatial.rightChannelGain * contribution;
         node.connect(leftSpatialGain);
         node.connect(rightSpatialGain);
         leftSpatialGain.connect(leftInput);
         rightSpatialGain.connect(rightInput);
       } else {
-        node.connect(leftInput);
-        node.connect(rightInput);
+        const mixGain = context.createGain();
+        mixGain.gain.value = contribution;
+        node.connect(mixGain);
+        mixGain.connect(leftInput);
+        mixGain.connect(rightInput);
       }
 
       return [node];

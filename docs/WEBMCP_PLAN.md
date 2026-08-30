@@ -137,7 +137,7 @@ The WebMCP extension adds:
 | VERIFY-1 | Automated real-browser WebMCP journey, human fallback, negative gates, accessibility, and failure paths. | Implemented and independently reviewed at `c08ddf3fa53ebe77d814fbe19f4a4025ea93daa9`; aggregate validation passed with six Chromium WebMCP journeys and zero model-route calls. |
 | VERIFY-0 | Native site-tool discovery and the intended typed and voice agent control in the supported desktop host. | The prior V1 Preview was owner-verified for native discovery, typed and voice control, Agent Reveal, human gates, Stop, and playback state transitions. That evidence predates the local v1.1 onboarding contract and must be repeated on its exact published Preview. Audible output was not available in the ChatGPT Work VM and remains a separate physical-browser proof before release. |
 | DESIGN-1 | Three visual directions generated from verified final-state screenshots. | Complete. Three grounded ImageGen directions were produced from the canonical family scene and the existing human/agent references; direction 2, `Resonant Canvas`, is the selected DESIGN-LOCK. |
-| VISUAL-UPDATE | One selected complete visual system for human and agent-guided modes. | Agent-mode `Resonant Canvas` is a local uncommitted v1.3 candidate. Its onboarding repair moves profile selection after consent, adds compact source-driven audiogram plots, automatically prepares the family scene and baseline, adds explicit agent-playback custody, exposes repeated listen-observe-adapt loops, lowers the listening docks to reveal more of the scene, and compacts the first adaptation choice. Local desktop/mobile Design-QA and the complete aggregate acceptance pass are required again before owner review and commit. The human-mode visual update remains a later layer. |
+| VISUAL-UPDATE | One selected complete visual system for human and agent-guided modes. | Agent-mode `Resonant Canvas` is a local uncommitted v1.4 candidate. Its onboarding repair moves profile selection after consent, adds compact source-driven audiogram plots, automatically prepares the family scene and baseline, adds explicit agent-playback custody, exposes repeated listen-observe-adapt loops, lowers the listening docks to reveal more of the scene, strengthens television masking through a versioned broadband mix, and orders four compact adaptation choices from environmental change to bilateral support. Local desktop/mobile Design-QA and the complete aggregate acceptance pass are required again before owner review and commit. The human-mode visual update remains a later layer. |
 | RELEASE | Public history, public deployment, demo evidence, and submission package. | Not started. |
 
 BUILD-3A begins only after BUILD-1 and BUILD-2 are reconstructed, reviewed, tested, and published on the canonical public development branch.
@@ -154,7 +154,21 @@ Image generation is used only after the structural and functional states are ver
 
 The selected agent direction is `Resonant Canvas`: the family scene becomes the full agent-session surface, frozen macro progress moves to a vertical spine, canonical conditions remain visible, and human-gated playback stays in the foreground. The acoustic-focus derivative appears only during the two canonical listening phases and is recorded in the existing generated-media manifest. This visual projection does not create a second semantic state.
 
-## V1.3 pre-release contract migration
+## V1.4 pre-release audio and adaptation migration
+
+This branch evolves the still-unreleased v1.3 candidate atomically. The migration verdict is **CONDITIONAL (pre-release, atomically migrated)**: request schemas and persisted evidence shape remain compatible, but opaque result identities, adaptation ordering, and the number of returned adaptation options change. All known producers and consumers are inside this repository and must move together.
+
+| Surface | V1.3 candidate | V1.4 migration | Compatibility and mitigation |
+|---|---|---|---|
+| Request fields and enums | `support_mode` already accepted `none`, `left-one-sided`, and `bilateral`. | No request-field or enum change. | Compile/schema compatible; strict request and one-variable tests remain authoritative. |
+| Adaptation response ordering | TV off, speaker closer, and bilateral support were available but bilateral appeared first. | Ordered TV off, speaker closer, left-ear support, bilateral support. | Behavior-changing; agent/direct parity and browser order assertions migrate atomically. |
+| Audio mix | Every present source stem used unity gain in the browser mix. | `auralis-family-mix-v2` applies one +6 dB linear broadband gain to the unchanged television stem while TV is on, while reserving deterministic -1.5 dB mix headroom; TV off remains zero contribution. | Behavior-changing; exact constants, mix identity, rendered peak ceiling, and physical owner listening must be verified. |
+| Result identifiers | Result identities described filters, intervention, and speaker position under the prior unity mix. | Every result identity binds the source-mix algorithm and television masking gain. | Intentionally breaking opaque identity values; no stored rows exist and evidence v3 shape is unchanged. |
+| Session bounds | At most two adaptation comparisons. | Unchanged. Bilateral remains available as the last displayed support option, not an automatically forced first change. | Runtime compatible; later selection remains human/agent controlled. |
+
+Rollback is atomic: restore the v1.3 contract, transformation plan, browser mixer, option derivation, UI layout, tests, README, and this plan together. Do not restore the mixer without restoring the result-identity version or vice versa.
+
+## Retained V1.3 pre-release contract migration
 
 This branch intentionally evolves the still-unreleased v1.2 candidate before public release. The migration is **BREAKING (pre-release, atomically migrated)**:
 
@@ -168,7 +182,7 @@ This branch intentionally evolves the still-unreleased v1.2 candidate before pub
 
 The first playback invocation returns after the first leg has actually started with `replayed: false`; the page continues the bounded sequence and a repeated identical request reads current or final status without restarting audio.
 
-Before commit, the only safe rollback unit is the complete unstaged visual-and-flow candidate described in the canonical Rollback section below. A distinct v1.3-only revert boundary may be claimed only after an exact reviewed commit split. Contract, profile fixtures, reducer, browser adapter, UI, tests, and documentation must never be partially restored across versions.
+Before commit, the only safe rollback unit is the complete unstaged visual-and-flow candidate described in the canonical Rollback section below. A distinct v1.4-only revert boundary may be claimed only after an exact reviewed commit split. Contract, profile fixtures, reducer, browser adapter, UI, tests, and documentation must never be partially restored across versions.
 
 ## Validation
 

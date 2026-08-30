@@ -16,7 +16,7 @@ This feature branch adds the deterministic WebMCP foundation for an agent-guided
 
 The implemented foundation includes:
 
-- the strict `auralis-webmcp-v1.3` contract with six narrow semantic tools for state, synthetic-profile staging, one-variable comparison preparation, agent-authorized listening, structured observations, and minimized session evidence;
+- the strict `auralis-webmcp-v1.4` contract with six narrow semantic tools for state, synthetic-profile staging, one-variable comparison preparation, agent-authorized listening, structured observations, and minimized session evidence;
 - thirteen explicit phases and three human-authority gates;
 - stale-revision and request-replay protection;
 - feature-detected browser registration through the application's existing state and validation logic;
@@ -27,6 +27,8 @@ Pure human browsing remains on the human landing page. Agent Reveal can begin on
 `allowedNextTools` is the sole current-executability authority. The capabilities projection reports `agenticActivationTool` only while initial activation is actually possible and separately reports the current `stageDemoSessionAction` as `start`, `select-profile`, or `null`. Tool descriptions instruct compatible agents to use a matching WebMCP tool before Computer Use. Computer Use remains a fallback for an explicitly approved visible human gate or when no matching WebMCP tool is available; the page cannot globally disable a host's normal browser controls while retaining accessible human controls.
 
 The active synthetic preset set is `auralis-synthetic-presets-v2`. It moves every approved threshold 10 dB HL lower on the displayed audiogram (numerically +10 dB HL) than the retained v1 fixture basis. The accessible SVG plots and deterministic audio transformation both read the same versioned source values, so the visuals and audible simulation cannot drift independently. Raw thresholds remain browser-memory-only and are not exposed in WebMCP state or evidence.
+
+The family mix uses the versioned `auralis-family-mix-v2` plan. While the television is on, its unchanged stem receives one bounded +6 dB broadband gain before the per-ear profile filters; the complete mix reserves a deterministic -1.5 dB headroom, and turning the television off removes that contribution completely. The adaptation choices are ordered from environmental to stronger illustrative support: TV off, speaker closer, left-ear support, then bilateral support. The session remains bounded to two adaptations.
 
 The structural Agent Reveal UI and the selected `Resonant Canvas` agent-mode visual layer are implemented in the local candidate. Real-agent and voice journeys, the later human-mode visual update, dependency remediation, and production promotion remain separately verified phases. See [`docs/WEBMCP_PLAN.md`](docs/WEBMCP_PLAN.md) for the public delivery contract and current status.
 

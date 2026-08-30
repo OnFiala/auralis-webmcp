@@ -240,19 +240,6 @@ export function deriveValidAdaptationOptions(
   }
 
   const options: AdaptationOptionProjection[] = [];
-  if (state.supportMode !== "bilateral") {
-    options.push(
-      Object.freeze({
-        variable: "support_mode" as const,
-        value: "bilateral" as const,
-        label: "Add bilateral illustrative support",
-        explanation:
-          "Apply the same bounded illustrative support to both ears in B.",
-        listenFor:
-          "Listen for whether the important speaker's consonants are easier to separate from the other voices.",
-      }),
-    );
-  }
   if (state.interventionState !== "tv-off") {
     options.push(
       Object.freeze({
@@ -262,7 +249,7 @@ export function deriveValidAdaptationOptions(
         explanation:
           "Remove only the television contribution while the people and timing stay unchanged.",
         listenFor:
-          "Listen for whether the important speaker is easier to follow without the television competing underneath.",
+          "Listen for the central voice without the television competing underneath.",
       }),
     );
   }
@@ -271,11 +258,37 @@ export function deriveValidAdaptationOptions(
       Object.freeze({
         variable: "speaker_position" as const,
         value: "closer-in-front" as const,
-        label: "Move the speaker closer and in front",
+        label: "Move the speaker closer",
         explanation:
           "Change only the important speaker's bounded illustrative position in B.",
         listenFor:
-          "Listen for whether the important speaker stands apart more clearly from the surrounding conversation.",
+          "Listen for the central voice separating more clearly from the group.",
+      }),
+    );
+  }
+  if (state.supportMode === "none") {
+    options.push(
+      Object.freeze({
+        variable: "support_mode" as const,
+        value: "left-one-sided" as const,
+        label: "Add left-ear illustrative support",
+        explanation:
+          "Apply bounded illustrative support to the left ear only in B.",
+        listenFor:
+          "Listen for a smaller one-ear change before trying both sides.",
+      }),
+    );
+  }
+  if (state.supportMode !== "bilateral") {
+    options.push(
+      Object.freeze({
+        variable: "support_mode" as const,
+        value: "bilateral" as const,
+        label: "Add bilateral illustrative support",
+        explanation:
+          "Apply the same bounded illustrative support to both ears in B.",
+        listenFor:
+          "Listen for clearer consonants against the other voices.",
       }),
     );
   }
