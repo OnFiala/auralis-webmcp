@@ -4,6 +4,7 @@ import Image from "next/image";
 import {
   useCallback,
   useEffect,
+  useId,
   useRef,
   useState,
   useSyncExternalStore,
@@ -18,9 +19,16 @@ import {
 } from "../browser/audio";
 import { downloadAttributableEvidence } from "../browser/evidence";
 import { requestLiveExplanation } from "../browser/model-client";
-import { registerAuralisWebMcpTools } from "../browser/webmcp";
+import {
+  registerAuralisWebMcpTools,
+  type AuralisWebMcpPlaybackPort,
+} from "../browser/webmcp";
 import { MAX_MODEL_ATTEMPTS_PER_SESSION } from "../contracts/runtime";
-import type { AuralisWebMcpPhase } from "../contracts/webmcp";
+import type {
+  AuralisWebMcpPhase,
+  PlayListeningComparisonData,
+  ProfileId,
+} from "../contracts/webmcp";
 import {
   canCompleteExperience,
   canRequestModelExplanation,
@@ -39,11 +47,21 @@ import {
   type ExperienceSupportMode,
 } from "../core/experience";
 import {
+  AURALIS_PROFILE_PROJECTIONS,
+  cancelWebMcpPlaybackRun,
+  completeWebMcpNoDifferenceRecovery,
+  confirmWebMcpListeningReadiness,
   confirmWebMcpConsent,
-  confirmWebMcpProfile,
+  deriveValidAdaptationOptions,
+  failWebMcpPlaybackRun,
   finishWebMcpSession,
   getAuralisState,
+  noDifferenceRecoveryCount,
+  prepareWebMcpBaselineRecovery,
+  prepareWebMcpAdaptation,
+  recordWebMcpHumanObservation,
   resetWebMcpExperience,
+  selectWebMcpProfile,
 } from "../core/webmcp";
 import {
   FREQUENCY_GRID_HZ,
@@ -72,6 +90,7 @@ type ActiveScreen =
   | "completion";
 
 type ExperienceScreen = Exclude<ActiveScreen, "welcome">;
+type PlaybackOutcome = "completed" | "cancelled" | "failed";
 
 const experienceScreenOrder: readonly ExperienceScreen[] = [
   "profile",
@@ -263,11 +282,15 @@ function Audiogram({
   profileLabel,
   rightThresholds,
   leftThresholds,
+  compact = false,
 }: Readonly<{
   profileLabel: string;
   rightThresholds: AudiogramThresholds;
   leftThresholds: AudiogramThresholds;
+  compact?: boolean;
 }>) {
+  const titleId = useId();
+  const descriptionId = useId();
   const series = [
     {
       ear: "right",
@@ -301,7 +324,10 @@ function Audiogram({
   )}. Left ear exact values: ${describeThresholds(leftThresholds)}.`;
 
   return (
-    <figure className="audiogram-figure">
+    <figure
+      className={`audiogram-figure${compact ? " audiogram-figure-compact" : ""}`}
+      data-testid={compact ? "agent-profile-audiogram" : undefined}
+    >
       <div className="audiogram-heading-row">
         <div>
           <p className="audiogram-kicker">Exact bilateral view</p>
@@ -349,13 +375,13 @@ function Audiogram({
         className="audiogram-chart"
         viewBox={`0 0 ${AUDIOGRAM_VIEWBOX_WIDTH} ${AUDIOGRAM_VIEWBOX_HEIGHT}`}
         role="img"
-        aria-labelledby="audiogram-chart-title"
-        aria-describedby="audiogram-chart-description"
+        aria-labelledby={titleId}
+        aria-describedby={descriptionId}
       >
-        <title id="audiogram-chart-title">
+        <title id={titleId}>
           Bilateral audiogram for {profileLabel}
         </title>
-        <desc id="audiogram-chart-description">{accessibleDescription}</desc>
+        <desc id={descriptionId}>{accessibleDescription}</desc>
 
         <g aria-hidden="true">
           <text className="audiogram-axis-title" x="18" y="24">
@@ -477,12 +503,165 @@ function Audiogram({
   );
 }
 
+function AgentVolumeConsentDialog({
+  controlsBusy,
+  onConfirm,
+  onReset,
+}: Readonly<{
+  controlsBusy: boolean;
+  onConfirm: (grantAgentPlayback: boolean) => Promise<void>;
+  onReset: () => void;
+}>) {
+  const dialogRef = useRef<HTMLElement | null>(null);
+  const primaryActionRef = useRef<HTMLButtonElement | null>(null);
+  const [grantAgentPlayback, setGrantAgentPlayback] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    const focusPrimary = () =>
+      primaryActionRef.current?.focus({ preventScroll: true });
+    const trapDialogFocus = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        return;
+      }
+      if (event.key !== "Tab") {
+        return;
+      }
+
+      const focusable = Array.from(
+        dialogRef.current?.querySelectorAll<HTMLElement>(
+          "button:not(:disabled), input:not(:disabled)",
+        ) ?? [],
+      );
+      const first = focusable.at(0);
+      const last = focusable.at(-1);
+      if (!first || !last) {
+        event.preventDefault();
+        return;
+      }
+
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    const containDialogFocus = (event: FocusEvent) => {
+      if (
+        event.target instanceof Node &&
+        !dialogRef.current?.contains(event.target)
+      ) {
+        focusPrimary();
+      }
+    };
+
+    document.addEventListener("keydown", trapDialogFocus, true);
+    document.addEventListener("focusin", containDialogFocus, true);
+    focusPrimary();
+    return () => {
+      document.removeEventListener("keydown", trapDialogFocus, true);
+      document.removeEventListener("focusin", containDialogFocus, true);
+    };
+  }, []);
+
+  return (
+    <section
+      ref={dialogRef}
+      className="agent-volume-dialog"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="agent-volume-heading"
+      aria-describedby="agent-volume-description"
+    >
+      <p className="agent-kicker">Human consent · scene ready</p>
+      <h2 id="agent-volume-heading">Set a comfortable listening level</h2>
+      <p id="agent-volume-description">
+        Put on your headphones and choose a comfortable device volume. Auralis
+        will not start playback until you confirm below.
+      </p>
+      <p className="agent-volume-safety-note">
+        Your headphones and device manage physical output; Auralis also
+        validates its digital signal before playback.
+      </p>
+      <label className="agent-playback-grant">
+        <input
+          type="checkbox"
+          checked={grantAgentPlayback}
+          onChange={(event) => setGrantAgentPlayback(event.target.checked)}
+          disabled={controlsBusy || submitting}
+        />
+        <span>
+          <strong>Allow agent-started playback for this session</strong>
+          <small>
+            The agent may start A, B, or A then B. I can stop immediately or
+            reset at any time. Leaving this off keeps playback click-only.
+          </small>
+        </span>
+      </label>
+      <div className="agent-volume-actions">
+        <button
+          ref={primaryActionRef}
+          type="button"
+          onClick={() => {
+            setSubmitting(true);
+            void onConfirm(grantAgentPlayback).finally(() =>
+              setSubmitting(false),
+            );
+          }}
+          disabled={controlsBusy || submitting}
+        >
+          {submitting
+            ? "Preparing audio safely…"
+            : "My listening level is comfortable"}
+        </button>
+        <button
+          className="agent-volume-reset"
+          type="button"
+          onClick={onReset}
+          disabled={controlsBusy || submitting}
+        >
+          Reset session
+        </button>
+      </div>
+    </section>
+  );
+}
+
 export default function HomePage() {
   const [activeScreen, setActiveScreen] = useState<ActiveScreen>("welcome");
   const [sceneTranscript, setSceneTranscript] = useState<
     readonly SceneTranscriptEntry[]
   >([]);
   const [experienceController] = useState(() => createExperienceController());
+  const agentPlaybackRunnerRef = useRef<
+    (run: PlayListeningComparisonData, onStarted: () => void) => Promise<void>
+  >(async () => {
+    throw new Error("The page playback port is not ready.");
+  });
+  const [webMcpPlaybackPort] = useState<AuralisWebMcpPlaybackPort>(() =>
+    Object.freeze({
+      start: (run) =>
+        new Promise<void>((resolve, reject) => {
+          let started = false;
+          void agentPlaybackRunnerRef
+            .current(run, () => {
+              started = true;
+              resolve();
+            })
+            .then(() => {
+              if (!started) {
+                reject(new Error("Playback was cancelled before it started."));
+              }
+            })
+            .catch((error: unknown) => {
+              if (!started) reject(error);
+            });
+        }),
+    }),
+  );
   const experience = useSyncExternalStore(
     experienceController.subscribe,
     experienceController.getSnapshot,
@@ -499,9 +678,19 @@ export default function HomePage() {
   const previousActiveScreenRef = useRef<ActiveScreen>("welcome");
   const runIdRef = useRef<string | null>(null);
   const modelRequestInFlightRef = useRef(false);
+  const autoLoadedAgentSessionRef = useRef<string | null>(null);
+  const activeAgentPlaybackRef = useRef<string | null>(null);
+  const guidedSequenceTokenRef = useRef(0);
+  const [agentListeningCue, setAgentListeningCue] = useState<string | null>(null);
+  const [agentAudioNotice, setAgentAudioNotice] = useState<string | null>(null);
+  const [guidedTransitionActive, setGuidedTransitionActive] = useState(false);
   const visible = projectVisibleExperienceState(experience);
   const terminalCompletion = projectTerminalCompletion(experience);
   const agentState = getAuralisState(experienceController);
+  const currentAgentComparison = experience.webMcp.session?.comparisons.at(-1) ?? null;
+  const noDifferenceReplayCount = currentAgentComparison
+    ? noDifferenceRecoveryCount(experience, currentAgentComparison.comparisonId)
+    : 0;
   const selectedTransformation = currentTransformedResult(experience);
   const renderingMode: ExperienceComparisonMode | null =
     experience.renders.reference.status === "rendering"
@@ -512,7 +701,10 @@ export default function HomePage() {
   const isRendering = renderingMode !== null;
   const isPlaying = experience.playback.status === "playing";
   const controlsLocked =
-    isRendering || isPlaying || experience.source.status === "loading";
+    isRendering ||
+    isPlaying ||
+    guidedTransitionActive ||
+    experience.source.status === "loading";
   const selectedPredefinedProfile =
     experience.selectedProfileEntry === "manual"
       ? null
@@ -543,19 +735,29 @@ export default function HomePage() {
     !isRendering &&
     experience.playback.status === "stopped";
   const explanationReady = simulatedReady;
-  const listeningTransportStatus =
-    renderingMode === "reference"
-      ? `Preparing A · Source reference · ${interventionLabels[experience.interventionState]} · ${speakerPositionLabels[experience.speakerPositionState]}`
+  const agentFocusPrefix = experience.webMcp.session
+    ? "Focus: central speaker · "
+    : "";
+  const listeningTransportStatus = guidedTransitionActive
+    ? experience.webMcp.session
+      ? "Transition A → B · Same moment · Focus: central speaker."
+      : "Transition A → B · Same moment · listening perspective changes now."
+    : renderingMode === "reference"
+      ? `Preparing A · ${agentFocusPrefix}Source reference · ${interventionLabels[experience.interventionState]} · ${speakerPositionLabels[experience.speakerPositionState]}`
       : renderingMode === "simulated"
-        ? `Preparing B · ${supportLabels[experience.supportMode]} · ${interventionLabels[experience.interventionState]} · ${speakerPositionLabels[experience.speakerPositionState]}`
+        ? `Preparing B · ${agentFocusPrefix}${supportLabels[experience.supportMode]} · ${interventionLabels[experience.interventionState]} · ${speakerPositionLabels[experience.speakerPositionState]}`
         : experience.playback.status === "playing"
           ? experience.playback.mode === "reference"
-            ? `Playing A · Source reference · ${interventionLabels[experience.playback.interventionState]} · ${speakerPositionLabels[experience.playback.speakerPositionState]}`
-            : `Playing B · ${supportLabels[experience.playback.supportMode ?? "none"]} · ${interventionLabels[experience.playback.interventionState]} · ${speakerPositionLabels[experience.playback.speakerPositionState]}`
+            ? `Playing A · ${agentFocusPrefix}Source reference · ${interventionLabels[experience.playback.interventionState]} · ${speakerPositionLabels[experience.playback.speakerPositionState]}`
+            : `Playing B · ${agentFocusPrefix}${supportLabels[experience.playback.supportMode ?? "none"]} · ${interventionLabels[experience.playback.interventionState]} · ${speakerPositionLabels[experience.playback.speakerPositionState]}`
           : experience.playback.status === "failed"
             ? "Playback blocked · The audio request failed closed."
-            : "Playback stopped · A and B controls are ready.";
-  const listeningTransportKind = renderingMode
+            : experience.webMcp.session
+              ? "Playback stopped · A and B controls are ready · Focus: central speaker."
+              : "Playback stopped · A and B controls are ready.";
+  const listeningTransportKind = guidedTransitionActive
+    ? "transition"
+    : renderingMode
     ? "preparing"
     : experience.playback.status === "playing"
       ? "playing"
@@ -589,9 +791,26 @@ export default function HomePage() {
   useEffect(() => {
     const binding = registerAuralisWebMcpTools({
       controller: experienceController,
+      playbackPort: webMcpPlaybackPort,
     });
     return () => binding.dispose();
-  }, [experienceController]);
+  }, [experienceController, webMcpPlaybackPort]);
+
+  useEffect(() => {
+    const session = experience.webMcp.session;
+    const profileId = session?.confirmedProfileId;
+    if (!session || !profileId || experience.source.status !== "idle") {
+      return;
+    }
+
+    const autoLoadKey = `${session.sessionId}:${profileId}`;
+    if (autoLoadedAgentSessionRef.current === autoLoadKey) {
+      return;
+    }
+
+    autoLoadedAgentSessionRef.current = autoLoadKey;
+    void loadSource();
+  }, [experience.source.status, experience.webMcp.session]);
 
   useEffect(
     () => () => {
@@ -698,33 +917,55 @@ export default function HomePage() {
     }
   }
 
-  async function play(mode: ExperienceComparisonMode) {
-    const plan = experience.comparisonPlan;
+  async function play(
+    mode: ExperienceComparisonMode,
+    options: Readonly<{
+      actor?: "human" | "agent";
+      runId?: string;
+      clipWindow?: Readonly<{ startSeconds: number; durationSeconds: number }>;
+      onStarted?: () => void;
+    }> = {},
+  ): Promise<PlaybackOutcome> {
+    const snapshot = experienceController.getSnapshot();
+    const plan = snapshot.comparisonPlan;
 
     if (!plan) {
       dispatch({ type: "operation-failed", code: "audio-runtime-unavailable" });
-      return;
+      return "failed";
     }
 
-    const resultIdentity = comparisonResultIdentity(experience, mode);
+    const resultIdentity = comparisonResultIdentity(snapshot, mode);
 
     if (!resultIdentity) {
       dispatch({ type: "operation-failed", code: "audio-runtime-unavailable" });
-      return;
+      return "failed";
     }
     dispatch({ type: "render-started", mode });
+
+    let settlePlayback!: (outcome: PlaybackOutcome) => void;
+    const playbackSettled = new Promise<PlaybackOutcome>((resolve) => {
+      settlePlayback = resolve;
+    });
 
     try {
       const evidence = await audioEngine().play(
         mode,
-        experience.supportMode,
-        experience.interventionState,
-        experience.speakerPositionState,
+        snapshot.supportMode,
+        snapshot.interventionState,
+        snapshot.speakerPositionState,
         plan,
-        experience.lowVolumeAcknowledged,
+        snapshot.lowVolumeAcknowledged,
         {
           onEnded: () => {
-            dispatch({ type: "playback-ended", resultIdentity });
+            dispatch({
+              type: "playback-ended",
+              resultIdentity,
+              runId: options.runId,
+            });
+            settlePlayback("completed");
+          },
+          onStopped: () => {
+            settlePlayback("cancelled");
           },
           onInterrupted: () => {
             dispatch({
@@ -732,8 +973,10 @@ export default function HomePage() {
               code: "audio-runtime-interrupted",
               mode,
             });
+            settlePlayback("failed");
           },
         },
+        options.clipWindow,
       );
 
       dispatch({
@@ -745,10 +988,14 @@ export default function HomePage() {
         sourceIdentity: evidence.sourceIdentity,
         resultIdentity: evidence.resultIdentity,
         peakDbFs: evidence.peakDbFs,
+        actor: options.actor ?? "human",
+        runId: options.runId,
       });
+      options.onStarted?.();
+      return playbackSettled;
     } catch (error) {
       if (error instanceof AudioPlaybackCancelledError) {
-        return;
+        return "cancelled";
       }
 
       dispatch({
@@ -759,12 +1006,219 @@ export default function HomePage() {
             : "audio-runtime-unavailable",
         mode,
       });
+      return "failed";
     }
   }
 
   function stopPlayback() {
+    guidedSequenceTokenRef.current += 1;
+    const runId = activeAgentPlaybackRef.current;
+    activeAgentPlaybackRef.current = null;
+    if (runId) {
+      cancelWebMcpPlaybackRun(experienceController, runId);
+    }
     audioEngineRef.current?.stop();
-    dispatch({ type: "playback-stopped" });
+    if (!runId) {
+      dispatch({ type: "playback-stopped" });
+    }
+    setAgentListeningCue(
+      runId ? "Playback stopped by the person. Nothing was counted as heard." : null,
+    );
+    setGuidedTransitionActive(false);
+  }
+
+  async function playAgentRun(
+    run: PlayListeningComparisonData,
+    onStarted: () => void,
+  ): Promise<void> {
+    const currentRun = experienceController
+      .getSnapshot()
+      .webMcp.session?.playbackRuns.find(
+        (candidate) => candidate.runId === run.runId,
+      );
+    if (!currentRun || currentRun.status !== "starting") {
+      throw new Error("The reserved playback run is no longer current.");
+    }
+
+    activeAgentPlaybackRef.current = run.runId;
+    setGuidedTransitionActive(false);
+    setAgentListeningCue(run.narration.now);
+    for (let index = 0; index < run.sequence.length; index += 1) {
+      if (activeAgentPlaybackRef.current !== run.runId) {
+        setGuidedTransitionActive(false);
+        return;
+      }
+      if (index > 0) {
+        setGuidedTransitionActive(true);
+        await new Promise<void>((resolve) => setTimeout(resolve, 220));
+        if (activeAgentPlaybackRef.current !== run.runId) {
+          setGuidedTransitionActive(false);
+          return;
+        }
+      }
+      const outcome = await play(run.sequence[index]!, {
+        actor: "agent",
+        runId: run.runId,
+        clipWindow: run.clipWindow,
+        onStarted: () => {
+          setGuidedTransitionActive(false);
+          if (index === 0) onStarted();
+        },
+      });
+      if (outcome === "cancelled") {
+        activeAgentPlaybackRef.current = null;
+        setGuidedTransitionActive(false);
+        return;
+      }
+      if (outcome === "failed") {
+        activeAgentPlaybackRef.current = null;
+        setGuidedTransitionActive(false);
+        failWebMcpPlaybackRun(experienceController, run.runId);
+        throw new Error("The browser audio runtime could not complete playback.");
+      }
+      if (index < run.sequence.length - 1 && run.narration.next) {
+        setAgentListeningCue(run.narration.next);
+      }
+    }
+    if (activeAgentPlaybackRef.current === run.runId) {
+      activeAgentPlaybackRef.current = null;
+      setGuidedTransitionActive(false);
+      setAgentListeningCue(run.narration.after);
+    }
+  }
+
+  agentPlaybackRunnerRef.current = playAgentRun;
+
+  async function playGuidedAB(
+    noDifferenceRecovery = false,
+  ): Promise<boolean> {
+    if (controlsLocked) return false;
+    const guidedSequenceToken = guidedSequenceTokenRef.current + 1;
+    guidedSequenceTokenRef.current = guidedSequenceToken;
+    setGuidedTransitionActive(false);
+    const comparisonId = experience.webMcp.session?.comparisons.at(-1)?.comparisonId;
+    setAgentListeningCue(
+      "Playing the same eight-second moment as A, then B. Focus on the important speaker at the center of the conversation.",
+    );
+    const clipWindow = { startSeconds: 32.3, durationSeconds: 8 } as const;
+    const referenceOutcome = await play("reference", { clipWindow });
+    if (referenceOutcome !== "completed") {
+      setGuidedTransitionActive(false);
+      return false;
+    }
+    setGuidedTransitionActive(true);
+    setAgentListeningCue(
+      "A has ended. B follows now; listen for what changes around the important speaker.",
+    );
+    await new Promise<void>((resolve) => setTimeout(resolve, 220));
+    if (guidedSequenceTokenRef.current !== guidedSequenceToken) {
+      setGuidedTransitionActive(false);
+      return false;
+    }
+    const simulatedOutcome = await play("simulated", {
+      clipWindow,
+      onStarted: () => setGuidedTransitionActive(false),
+    });
+    if (simulatedOutcome === "completed") {
+      setGuidedTransitionActive(false);
+      setAgentListeningCue(
+        "What did you notice? Use your own words — there is no technical phrase you need to choose.",
+      );
+      if (noDifferenceRecovery && comparisonId) {
+        completeWebMcpNoDifferenceRecovery(
+          experienceController,
+          comparisonId,
+        );
+      }
+      return true;
+    }
+    setGuidedTransitionActive(false);
+    return false;
+  }
+
+  async function confirmAgentListeningReadiness(
+    grantAgentPlayback: boolean,
+  ): Promise<void> {
+    let effectiveGrant = false;
+    try {
+      await audioEngine().unlock();
+      effectiveGrant = grantAgentPlayback;
+      setAgentAudioNotice(
+        grantAgentPlayback
+          ? "Agent-started A/B playback is enabled for this session. Stop remains human-controlled."
+          : "Playback remains click-only. You can still use every visible listening control.",
+      );
+    } catch {
+      setAgentAudioNotice(
+        "The browser could not unlock audio yet. Agent playback remains off; use a visible Play control to retry safely.",
+      );
+    }
+    confirmWebMcpListeningReadiness(experienceController, effectiveGrant);
+  }
+
+  function recordDirectObservation(
+    focusedSpeech: "clear" | "partial" | "missed" | "unsure",
+    maskingSources:
+      | readonly ["none"]
+      | readonly ["unsure"]
+      | readonly ["television"]
+      | readonly ["competing_speech"]
+      | readonly ["television", "competing_speech"],
+    relativeToPrevious: "better" | "same" | "worse" | "unsure" | "not_compared",
+    nextAction: "continue" | "summarize" = "continue",
+  ) {
+    const session = experienceController.getSnapshot().webMcp.session;
+    const comparison = session?.comparisons.at(-1);
+    const adaptationCount =
+      session?.comparisons.filter((candidate) => candidate.kind === "adaptation")
+        .length ?? 0;
+    const canonicalNextAction =
+      comparison?.kind === "adaptation" && adaptationCount >= 2
+        ? ("summarize" as const)
+        : nextAction;
+    recordWebMcpHumanObservation(experienceController, {
+      focusedSpeech,
+      maskingSources: [...maskingSources],
+      relativeToPrevious,
+      nextAction: canonicalNextAction,
+    });
+  }
+
+  function handleNoClearDifference() {
+    setAgentListeningCue(
+      "That is a valid answer. Replay A then B and focus on the central speaker’s consonants while the television and other voices overlap.",
+    );
+    void playGuidedAB(true);
+  }
+
+  function chooseAgentAdaptation(
+    option: ReturnType<typeof deriveValidAdaptationOptions>[number],
+  ) {
+    setAgentAudioNotice(null);
+    switch (option.variable) {
+      case "support_mode":
+        prepareWebMcpAdaptation(
+          experienceController,
+          option.variable,
+          option.value,
+        );
+        break;
+      case "television_state":
+        prepareWebMcpAdaptation(
+          experienceController,
+          option.variable,
+          option.value,
+        );
+        break;
+      case "speaker_position":
+        prepareWebMcpAdaptation(
+          experienceController,
+          option.variable,
+          option.value,
+        );
+        break;
+    }
+    setAgentListeningCue(option.listenFor);
   }
 
   function navigateTo(screen: ActiveScreen) {
@@ -861,8 +1315,8 @@ export default function HomePage() {
     confirmWebMcpConsent(experienceController);
   }
 
-  function confirmAgentProfile() {
-    confirmWebMcpProfile(experienceController, FAMILY_DINNER_SOURCE_ID);
+  function selectAgentProfile(profileId: ProfileId) {
+    selectWebMcpProfile(experienceController, profileId);
   }
 
   function finishAgentSession() {
@@ -870,13 +1324,21 @@ export default function HomePage() {
   }
 
   function resetAgentSession() {
+    guidedSequenceTokenRef.current += 1;
     audioEngineRef.current?.stop();
+    activeAgentPlaybackRef.current = null;
     runIdRef.current = null;
     setSceneTranscript([]);
+    autoLoadedAgentSessionRef.current = null;
+    setAgentListeningCue(null);
+    setAgentAudioNotice(null);
     flushSync(() => {
       resetWebMcpExperience(experienceController);
     });
     setActiveScreen("welcome");
+    setTimeout(() => {
+      screenHeadingRef.current?.focus({ preventScroll: true });
+    }, 0);
   }
 
   function downloadCurrentEvidence() {
@@ -1458,6 +1920,11 @@ export default function HomePage() {
     };
     const referenceCardState = cardState("reference", referenceReady);
     const simulatedCardState = cardState("simulated", simulatedReady);
+    const agentComparison = experience.webMcp.session?.comparisons.at(-1) ?? null;
+    const agentBaseline = agentComparison?.kind === "baseline";
+    const awaitingAgentObservation =
+      agentState.phase === "awaiting_baseline_observation" ||
+      agentState.phase === "awaiting_comparison_observation";
     const cardStateLabel = (
       state: ReturnType<typeof cardState>,
     ): string => {
@@ -1476,11 +1943,21 @@ export default function HomePage() {
     return (
       <div
         className="ab-playback-grid"
+        data-transport-state={listeningTransportKind}
         role="group"
         aria-label="A and B playback choices"
       >
+        <p
+          className={`listening-transport-status listening-transport-status-${listeningTransportKind}`}
+          role="status"
+          aria-live="polite"
+        >
+          {listeningTransportStatus}
+        </p>
         <article
           className={`ab-playback-card ab-playback-card-a ab-playback-card-${referenceCardState}`}
+          data-playback-state={referenceCardState}
+          aria-current={referenceCardState === "playing" ? "true" : undefined}
         >
           <div className="ab-card-heading">
             <span className="ab-card-letter" aria-hidden="true">
@@ -1511,7 +1988,9 @@ export default function HomePage() {
             {cardStateLabel(referenceCardState)}
           </p>
           <p className="ab-support-note">
-            A remains independent of the B support choice.
+            {agentBaseline
+              ? "A is the unchanged validated source reference."
+              : "A remains independent of the B support choice."}
           </p>
           <button
             className="ab-play-button"
@@ -1531,6 +2010,8 @@ export default function HomePage() {
 
         <article
           className={`ab-playback-card ab-playback-card-b ab-playback-card-${simulatedCardState}`}
+          data-playback-state={simulatedCardState}
+          aria-current={simulatedCardState === "playing" ? "true" : undefined}
         >
           <div className="ab-card-heading">
             <span className="ab-card-letter" aria-hidden="true">
@@ -1542,14 +2023,22 @@ export default function HomePage() {
             </div>
           </div>
           <p className="ab-card-description">
-            Hear the same source with the current illustrative support and
-            environmental conditions.
+            {agentBaseline
+              ? "Hear the same source through the selected synthetic profile. No adaptation is applied in this baseline."
+              : "Hear the same source with the current illustrative support and environmental conditions."}
           </p>
           <dl className="ab-condition-list">
-            <div>
-              <dt>Support</dt>
-              <dd>{supportLabels[experience.supportMode]}</dd>
-            </div>
+            {agentBaseline ? (
+              <div>
+                <dt>Change</dt>
+                <dd>Synthetic listening profile only</dd>
+              </div>
+            ) : (
+              <div>
+                <dt>Support</dt>
+                <dd>{supportLabels[experience.supportMode]}</dd>
+              </div>
+            )}
             <div>
               <dt>Environment</dt>
               <dd>
@@ -1562,7 +2051,13 @@ export default function HomePage() {
             <span aria-hidden="true" />
             {cardStateLabel(simulatedCardState)}
           </p>
-          <p className="ab-support-note">Support applies only to B.</p>
+          <p className="ab-support-note">
+            {agentBaseline
+              ? "Baseline truth: TV on · original position · no support."
+              : experience.webMcp.session
+                ? "The selected adaptation applies only to B."
+                : "Support applies only to B."}
+          </p>
           <button
             className="ab-play-button"
             type="button"
@@ -1578,6 +2073,154 @@ export default function HomePage() {
             Play B
           </button>
         </article>
+        <div className="guided-listening-control">
+          <div>
+            <p className="agent-kicker">Guided comparison</p>
+            <strong>Hear the same moment as A, then B</strong>
+            <span>
+              Eight seconds each, with a smooth handoff and a clear listening
+              focus.
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => void playGuidedAB()}
+            disabled={
+              !experience.comparisonPlan ||
+              experience.source.status !== "ready" ||
+              !experience.lowVolumeAcknowledged ||
+              controlsLocked
+            }
+          >
+            Play A then B
+          </button>
+        </div>
+        {experience.webMcp.session &&
+        (agentListeningCue || agentAudioNotice?.startsWith("The browser could not unlock")) ? (
+          <div className="agent-listening-cue" role="status" aria-live="polite">
+            {agentListeningCue ? <strong>{agentListeningCue}</strong> : null}
+            {agentAudioNotice?.startsWith("The browser could not unlock") ? (
+              <span>{agentAudioNotice}</span>
+            ) : null}
+          </div>
+        ) : null}
+        {experience.webMcp.session && awaitingAgentObservation ? (
+          <section
+            className="agent-observation-prompt"
+            aria-labelledby="agent-observation-heading"
+          >
+            <div>
+              <p className="agent-kicker">Your words, not technical labels</p>
+              <h3 id="agent-observation-heading">
+                {agentBaseline
+                  ? "What could you follow in the scene?"
+                  : "How did this version feel compared with before?"}
+              </h3>
+              <p>
+                Say it to the agent, type it, or choose the closest everyday
+                answer here. The agent translates only what you report.
+              </p>
+            </div>
+            <div className="agent-observation-options">
+              {agentBaseline ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      recordDirectObservation(
+                        "clear",
+                        ["none"],
+                        "not_compared",
+                      )
+                    }
+                  >
+                    I could follow the central voice
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      recordDirectObservation(
+                        "partial",
+                        ["competing_speech"],
+                        "not_compared",
+                      )
+                    }
+                  >
+                    I lost parts when people overlapped
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      recordDirectObservation(
+                        "missed",
+                        ["television", "competing_speech"],
+                        "not_compared",
+                      )
+                    }
+                  >
+                    The TV and voices covered too much
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      recordDirectObservation(
+                        "clear",
+                        ["none"],
+                        "better",
+                      )
+                    }
+                  >
+                    The central voice was easier to follow
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      recordDirectObservation(
+                        "partial",
+                        ["competing_speech"],
+                        "worse",
+                      )
+                    }
+                  >
+                    It became harder to follow
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleNoClearDifference}
+                  >
+                    I am not sure yet
+                  </button>
+                </>
+              )}
+              <button
+                className="agent-no-difference-button"
+                type="button"
+                onClick={handleNoClearDifference}
+                disabled={controlsLocked || noDifferenceReplayCount >= 2}
+              >
+                I do not hear a clear difference
+              </button>
+              {noDifferenceReplayCount > 0 ? (
+                <button
+                  className="agent-continue-unsure-button"
+                  type="button"
+                  onClick={() =>
+                    recordDirectObservation(
+                      "unsure",
+                      ["unsure"],
+                      agentBaseline ? "not_compared" : "same",
+                    )
+                  }
+                >
+                  Continue and record that I am unsure
+                </button>
+              ) : null}
+            </div>
+          </section>
+        ) : null}
       </div>
     );
   }
@@ -1624,7 +2267,8 @@ export default function HomePage() {
 
         {listeningPlaybackCards()}
 
-        <fieldset
+        {!experience.webMcp.session ? (
+        <><fieldset
           className="support-selector listening-support-selector"
           disabled={
             !experience.comparisonPlan ||
@@ -1668,21 +2312,18 @@ export default function HomePage() {
           Illustrative support comparison—not a fitting, prescription, or
           prediction of benefit.
         </p>
+        </>
+        ) : null}
 
-        <p
-          className={`listening-transport-status listening-transport-status-${listeningTransportKind}`}
-          role="status"
-          aria-live="polite"
-        >
-          {listeningTransportStatus}
-        </p>
-        <p className="listening-volume-confirmation">
-          <span aria-hidden="true" />
-          Low volume acknowledged
-        </p>
+        {!experience.webMcp.session ? (
+          <p className="listening-volume-confirmation">
+            <span aria-hidden="true" />
+            Comfortable listening level acknowledged
+          </p>
+        ) : null}
 
         <div className="listening-details">
-          {sceneTranscriptDetail()}
+          {!experience.webMcp.session ? sceneTranscriptDetail() : null}
 
           <details className="technical-detail">
             <summary>Technical comparison details</summary>
@@ -1724,14 +2365,22 @@ export default function HomePage() {
                 </table>
               </div>
             ) : null}
+            {experience.webMcp.session ? (
+              <p className="technical-limitation">
+                This comparison is illustrative and non-clinical. It is not a
+                fitting, prescription, or prediction of individual benefit.
+              </p>
+            ) : null}
           </details>
         </div>
 
-        <p className="limitation listening-limitation">
-          This spectral transformation and every support state are illustrative
-          and non-clinical. They are not a hearing-aid fitting, prescription, or
-          prediction of individual benefit.
-        </p>
+        {!experience.webMcp.session ? (
+          <p className="limitation listening-limitation">
+            This spectral transformation and every support state are illustrative
+            and non-clinical. They are not a hearing-aid fitting, prescription, or
+            prediction of individual benefit.
+          </p>
+        ) : null}
       </section>
     );
   }
@@ -1997,6 +2646,108 @@ export default function HomePage() {
         </div>
 
         {interventionPlaybackDock()}
+        {experience.webMcp.session ? (
+          <div className="agent-adaptation-listening-loop">
+            <div className="guided-listening-control">
+              <div>
+                <p className="agent-kicker">Repeatable listening loop</p>
+                <strong>Compare the same moment again</strong>
+                <span>
+                  Play A then B, ask the agent to run it, or use either Play
+                  control above.
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => void playGuidedAB()}
+                disabled={controlsLocked}
+              >
+                Play A then B
+              </button>
+            </div>
+            {agentListeningCue ||
+            agentAudioNotice?.startsWith("The browser could not unlock") ? (
+              <div
+                className="agent-listening-cue"
+                role="status"
+                aria-live="polite"
+              >
+                {agentListeningCue ? <strong>{agentListeningCue}</strong> : null}
+                {agentAudioNotice?.startsWith("The browser could not unlock") ? (
+                  <span>{agentAudioNotice}</span>
+                ) : null}
+              </div>
+            ) : null}
+            {agentState.phase === "awaiting_comparison_observation" ? (
+              <section
+                className="agent-observation-prompt"
+                aria-labelledby="agent-adaptation-observation-heading"
+              >
+                <div>
+                  <p className="agent-kicker">Use everyday words</p>
+                  <h3 id="agent-adaptation-observation-heading">
+                    What changed for you?
+                  </h3>
+                  <p>
+                    You can speak or type a vague answer. The agent maps only
+                    your stated meaning into the bounded session evidence.
+                  </p>
+                </div>
+                <div className="agent-observation-options">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      recordDirectObservation("clear", ["none"], "better")
+                    }
+                  >
+                    The central voice was easier to follow
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      recordDirectObservation(
+                        "partial",
+                        ["competing_speech"],
+                        "worse",
+                      )
+                    }
+                  >
+                    It became harder to follow
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleNoClearDifference}
+                  >
+                    I am not sure yet
+                  </button>
+                  <button
+                    className="agent-no-difference-button"
+                    type="button"
+                    onClick={handleNoClearDifference}
+                    disabled={controlsLocked || noDifferenceReplayCount >= 2}
+                  >
+                    I do not hear a clear difference
+                  </button>
+                  {noDifferenceReplayCount > 0 ? (
+                    <button
+                      className="agent-continue-unsure-button"
+                      type="button"
+                      onClick={() =>
+                        recordDirectObservation(
+                          "unsure",
+                          ["unsure"],
+                          "same",
+                        )
+                      }
+                    >
+                      Continue and record no clear difference
+                    </button>
+                  ) : null}
+                </div>
+              </section>
+            ) : null}
+          </div>
+        ) : null}
         <p
           className={`intervention-transport-status intervention-transport-status-${interventionTransportKind}`}
           role="status"
@@ -2392,9 +3143,93 @@ export default function HomePage() {
 
   function renderAgentSurface(phase: AuralisWebMcpPhase) {
     switch (phase) {
+      case "awaiting_profile_selection":
+        return (
+          <section
+            className="agent-profile-selection"
+            aria-labelledby="agent-next-action-heading"
+          >
+            <div className="agent-profile-selection-heading">
+              <p className="agent-kicker">Three approved demo audiograms</p>
+              <p>
+                Nothing is preselected. These are the same grounded
+                descriptions available to the agent.
+              </p>
+            </div>
+            <div className="agent-profile-options">
+              {AURALIS_PROFILE_PROJECTIONS.map((profile) => {
+                const audiogram = predefinedProfileById(profile.profileId);
+                return (
+                <article
+                  key={profile.profileId}
+                  className="agent-profile-card"
+                  data-profile-id={profile.profileId}
+                >
+                  <p className="agent-profile-classification">
+                    Synthetic illustrative profile
+                  </p>
+                  <h3>{profile.displayName}</h3>
+                  <Audiogram
+                    compact
+                    profileLabel={profile.displayName}
+                    rightThresholds={audiogram.rightThresholdsDbHl}
+                    leftThresholds={audiogram.leftThresholdsDbHl}
+                  />
+                  <p>{profile.everydayDescription}</p>
+                  <dl>
+                    <div>
+                      <dt>Shows</dt>
+                      <dd>{profile.demonstrates}</dd>
+                    </div>
+                  </dl>
+                  <button
+                    type="button"
+                    onClick={() => selectAgentProfile(profile.profileId)}
+                    disabled={controlsLocked}
+                  >
+                    Use {profile.displayName}
+                  </button>
+                </article>
+                );
+              })}
+            </div>
+            <p className="agent-profile-limitation">
+              Synthetic and illustrative only — not a diagnosis or a
+              prediction of an individual person’s hearing.
+            </p>
+          </section>
+        );
       case "awaiting_scene_load":
+        return (
+          <section className="agent-scene-loading" aria-live="polite">
+            <p className="agent-kicker">Scene-first preparation</p>
+            <h2>
+              {experience.source.status === "failed"
+                ? "The family scene could not be prepared"
+                : "Preparing the family scene"}
+            </h2>
+            <p>
+              {experience.source.status === "failed"
+                ? "The session and selected audiogram are preserved. Retry only the scene preparation."
+                : "The validated 64-second scene is loading automatically. Nothing will play."}
+            </p>
+            {experience.source.status === "failed" ? (
+              <button type="button" onClick={() => void loadSource()}>
+                Retry scene preparation
+              </button>
+            ) : (
+              <span className="agent-loading-indicator" aria-hidden="true" />
+            )}
+          </section>
+        );
       case "awaiting_volume_acknowledgement":
-        return renderSceneScreen();
+        return (
+          <AgentVolumeConsentDialog
+            controlsBusy={controlsLocked}
+            onConfirm={confirmAgentListeningReadiness}
+            onReset={resetAgentSession}
+          />
+        );
       case "awaiting_baseline_listening":
       case "awaiting_baseline_observation":
         return renderListeningScreen();
@@ -2403,11 +3238,51 @@ export default function HomePage() {
         return renderInterventionsScreen();
       case "ready_for_summary":
         return renderExplanationScreen();
+      case "ready_for_baseline":
+        return (
+          <section className="agent-recovery-action" role="status">
+            <p className="agent-kicker">Bounded recovery</p>
+            <h2>The scene is ready; the baseline needs one final commit</h2>
+            <p>
+              This state should normally be skipped automatically after the
+              comfortable-volume confirmation. No audio will start.
+            </p>
+            <button
+              type="button"
+              onClick={() => prepareWebMcpBaselineRecovery(experienceController)}
+              disabled={controlsLocked}
+            >
+              Prepare the fixed baseline
+            </button>
+          </section>
+        );
+      case "ready_for_adaptation": {
+        const options = deriveValidAdaptationOptions(experience);
+        return (
+          <section
+            className="agent-adaptation-choice"
+            aria-label="Available adaptation options"
+          >
+            <div className="agent-adaptation-options">
+              {options.map((option) => (
+                <article key={`${option.variable}-${option.value}`}>
+                  <h3>{option.label}</h3>
+                  <small>{option.listenFor}</small>
+                  <button
+                    type="button"
+                    onClick={() => chooseAgentAdaptation(option)}
+                    disabled={controlsLocked}
+                  >
+                    Try this change
+                  </button>
+                </article>
+              ))}
+            </div>
+          </section>
+        );
+      }
       case "awaiting_session_stage":
       case "awaiting_consent":
-      case "awaiting_profile_confirmation":
-      case "ready_for_baseline":
-      case "ready_for_adaptation":
       case "complete":
         return null;
     }
@@ -2431,10 +3306,9 @@ export default function HomePage() {
         humanGate={agentState.humanGate}
         allowedNextTools={agentState.allowedNextTools}
         controlsBusy={controlsLocked}
-        stopAvailable={isPlaying || isRendering}
+        stopAvailable={isPlaying || isRendering || guidedTransitionActive}
         onStopImmediately={stopPlayback}
         onConfirmConsent={confirmAgentConsent}
-        onConfirmProfile={confirmAgentProfile}
         onFinishSession={finishAgentSession}
         onResetSession={resetAgentSession}
       >

@@ -21,7 +21,7 @@ const chapters = [
 const chapterForPhase: Record<AuralisWebMcpPhase, number> = {
   awaiting_session_stage: 0,
   awaiting_consent: 0,
-  awaiting_profile_confirmation: 0,
+  awaiting_profile_selection: 0,
   awaiting_scene_load: 0,
   awaiting_volume_acknowledgement: 0,
   ready_for_baseline: 1,
@@ -49,17 +49,17 @@ const phaseCopy: Record<
     detail:
       "Auralis is an illustrative family comparison, not a diagnosis or treatment recommendation.",
   },
-  awaiting_profile_confirmation: {
-    eyebrow: "Human gate",
-    heading: "Review the staged profile",
+  awaiting_profile_selection: {
+    eyebrow: "Shared choice",
+    heading: "Choose a demo audiogram",
     detail:
-      "The agent has proposed a synthetic profile. Confirm it here or ask the agent to stage a different one.",
+      "Choose one of the same three options shown to the agent. You can click here or direct the agent by text or voice.",
   },
   awaiting_scene_load: {
-    eyebrow: "Human gate",
-    heading: "Load the family scene",
+    eyebrow: "Agent preparation",
+    heading: "Preparing the family scene",
     detail:
-      "The scene remains under your control. Loading it does not start playback.",
+      "The selected profile is locked for this run and the validated scene is loading automatically. Nothing will play.",
   },
   awaiting_volume_acknowledgement: {
     eyebrow: "Human gate",
@@ -68,16 +68,16 @@ const phaseCopy: Record<
       "Confirm the physical listening level before any comparison can play.",
   },
   ready_for_baseline: {
-    eyebrow: "Agent action",
-    heading: "Prepare the first comparison",
+    eyebrow: "Recovery action",
+    heading: "Prepare the fixed baseline",
     detail:
-      "Tell the agent when you are ready. It can prepare the same-source A/B baseline, but it cannot press Play for you.",
+      "The baseline normally appears with the volume confirmation. If it is missing, use the visible recovery control.",
   },
   awaiting_baseline_listening: {
-    eyebrow: "Human gate",
+    eyebrow: "Shared listening",
     heading: "Listen to A, then B",
     detail:
-      "Use the visible controls. The people, words, and timeline stay the same; only the listening perspective changes.",
+      "Use the visible controls or ask the agent to play A, B, or the guided A-then-B sequence if you granted playback.",
   },
   awaiting_baseline_observation: {
     eyebrow: "Tell the agent",
@@ -92,10 +92,10 @@ const phaseCopy: Record<
       "The agent can propose one bounded change based on what you noticed. You remain in control of the next listening step.",
   },
   awaiting_comparison_listening: {
-    eyebrow: "Human gate",
-    heading: "Listen to the changed result",
+    eyebrow: "Shared listening",
+    heading: "Now listen to B",
     detail:
-      "Play B for the current conditions. A remains available if you want to compare the source again.",
+      "Listen directly or ask the agent to replay the same eight-second moment. Focus on the important speaker.",
   },
   awaiting_comparison_observation: {
     eyebrow: "Tell the agent",
@@ -141,8 +141,9 @@ const changeLabels = {
 
 const toolLabels: Record<AuralisToolName, string> = {
   get_auralis_state: "Read current Auralis state",
-  stage_demo_session: "Stage a synthetic profile",
+  stage_demo_session: "Start the session or choose a demo audiogram",
   prepare_comparison: "Prepare the next comparison",
+  play_listening_comparison: "Play A, B, or the guided A then B sequence",
   record_user_observation: "Record your stated observation",
   get_session_evidence: "Read session evidence",
 };
@@ -152,9 +153,13 @@ const eventLabels = {
   session_staged: "Session staged",
   profile_confirmed: "Profile confirmed",
   scene_loaded: "Scene loaded",
-  volume_acknowledged: "Low volume acknowledged",
+  volume_acknowledged: "Comfortable volume acknowledged",
   comparison_prepared: "Comparison prepared",
+  playback_requested: "Playback requested",
   playback_started: "Playback started",
+  playback_completed: "Playback completed",
+  playback_cancelled: "Playback cancelled",
+  playback_failed: "Playback failed",
   observation_recorded: "Observation recorded",
   session_finished: "Session finished",
 } as const;
@@ -169,7 +174,6 @@ export type AgentSessionShellProps = Readonly<{
   stopAvailable: boolean;
   onStopImmediately: () => void;
   onConfirmConsent: () => void;
-  onConfirmProfile: () => void;
   onFinishSession: () => void;
   onResetSession: () => void;
   children: ReactNode;
@@ -185,7 +189,6 @@ export function AgentSessionShell({
   stopAvailable,
   onStopImmediately,
   onConfirmConsent,
-  onConfirmProfile,
   onFinishSession,
   onResetSession,
   children,
@@ -201,9 +204,15 @@ export function AgentSessionShell({
     (tool) => tool !== "get_auralis_state" && tool !== "get_session_evidence",
   );
   const recentEvents = session.events.slice(-5).toReversed();
+  const acousticFocusActive =
+    phase === "awaiting_baseline_listening" ||
+    phase === "awaiting_comparison_listening";
+  const volumeModalOpen = phase === "awaiting_volume_acknowledgement";
 
   useEffect(() => {
-    actionHeadingRef.current?.focus({ preventScroll: true });
+    if (phase !== "awaiting_volume_acknowledgement") {
+      actionHeadingRef.current?.focus({ preventScroll: true });
+    }
   }, [phase]);
 
   const directGateControl = (() => {
@@ -212,12 +221,6 @@ export function AgentSessionShell({
         return (
           <button type="button" onClick={onConfirmConsent} disabled={controlsBusy}>
             I understand and consent
-          </button>
-        );
-      case "confirm_profile":
-        return (
-          <button type="button" onClick={onConfirmProfile} disabled={controlsBusy}>
-            Confirm {stagedProfile?.displayName ?? "staged profile"}
           </button>
         );
       case "finish_session":
@@ -233,8 +236,27 @@ export function AgentSessionShell({
 
   return (
     <main className="agent-session-shell" data-agent-phase={phase}>
+      <div className="agent-scene-backdrop" aria-hidden="true">
+        <Image
+          src={
+            acousticFocusActive
+              ? "/media/auralis-family-scene-agent-v1.webp"
+              : "/media/auralis-family-scene.png"
+          }
+          fill
+          sizes="100vw"
+          className="agent-scene-backdrop-image"
+          alt=""
+          priority
+        />
+      </div>
+      <div className="agent-scene-scrim" aria-hidden="true" />
       <div className="agent-reveal-wash" aria-hidden="true" />
-      <header className="agent-session-header">
+      <header
+        className="agent-session-header"
+        inert={volumeModalOpen ? true : undefined}
+        aria-hidden={volumeModalOpen ? true : undefined}
+      >
         <div className="agent-session-brand">
           <Image
             src="/media/auralis-mark.png"
@@ -261,7 +283,12 @@ export function AgentSessionShell({
       </header>
 
       <div className="agent-session-content">
-        <ol className="agent-chapters" aria-label="Agent-guided session progress">
+        <ol
+          className="agent-chapters"
+          aria-label="Agent-guided session progress"
+          inert={volumeModalOpen ? true : undefined}
+          aria-hidden={volumeModalOpen ? true : undefined}
+        >
           {chapters.map((chapter, index) => {
             const status =
               index < activeChapter
@@ -289,6 +316,8 @@ export function AgentSessionShell({
           aria-labelledby="agent-next-action-heading"
           aria-live="polite"
           aria-atomic="true"
+          inert={volumeModalOpen ? true : undefined}
+          aria-hidden={volumeModalOpen ? true : undefined}
         >
           <div>
             <p className="agent-kicker">{copy.eyebrow}</p>
@@ -309,7 +338,28 @@ export function AgentSessionShell({
             <span>Type to agent</span>
             <span>Voice to agent</span>
           </div>
-          {humanGate ? (
+          <dl
+            className="agent-visible-state"
+            aria-label="Current agent session state"
+          >
+            <div>
+              <dt>Profile</dt>
+              <dd>{stagedProfile?.displayName ?? "Not selected"}</dd>
+            </div>
+            <div>
+              <dt>Session</dt>
+              <dd>{session.completionState.replaceAll("_", " ")}</dd>
+            </div>
+            <div>
+              <dt>Comparisons</dt>
+              <dd>{session.comparisons.length} / 3</dd>
+            </div>
+            <div>
+              <dt>Observations</dt>
+              <dd>{session.observations.length}</dd>
+            </div>
+          </dl>
+          {humanGate && humanGate.kind !== "acknowledge_comfortable_volume" ? (
             <div className="agent-human-gate" role="note">
               <div>
                 <strong>Human authority required</strong>
@@ -317,7 +367,11 @@ export function AgentSessionShell({
               </div>
               {directGateControl}
             </div>
-          ) : mutatingNextTools.length > 0 ? (
+          ) : humanGate?.kind === "acknowledge_comfortable_volume" ||
+            phase === "awaiting_scene_load" ||
+            phase === "awaiting_profile_selection" ||
+            phase === "ready_for_adaptation" ||
+            acousticFocusActive ? null : mutatingNextTools.length > 0 ? (
             <div className="agent-staged-action" role="status">
               <strong>Available to the agent</strong>
               <span>
@@ -342,7 +396,52 @@ export function AgentSessionShell({
           )}
         </section>
 
+        {current ? (
+          <div
+            className="agent-scene-conditions"
+            aria-label="Current listening conditions"
+          >
+              {current.kind === "adaptation" ? (
+                <span data-condition="support">
+                  {supportLabels[current.settings.supportMode]}
+                </span>
+              ) : null}
+              <span data-condition="television">
+                {televisionLabels[current.settings.televisionState]}
+              </span>
+              <span data-condition="speaker">
+                {speakerLabels[current.settings.speakerPosition]}
+              </span>
+          </div>
+        ) : null}
+
         <div className="agent-session-grid">
+          <div className="agent-human-surface">
+            {children ?? (
+              <section
+                className="agent-waiting-surface"
+                aria-label="Agent guidance status"
+              >
+                <p className="agent-kicker">Page controls</p>
+                <h2>Continue through the active control above</h2>
+                <p>
+                  Auralis exposes semantic options to the agent while all
+                  protected human actions remain visible on this page.
+                </p>
+              </section>
+            )}
+          </div>
+        </div>
+
+        <details
+          className="agent-session-details"
+          inert={volumeModalOpen ? true : undefined}
+          aria-hidden={volumeModalOpen ? true : undefined}
+        >
+          <summary>
+            <span>Session details</span>
+            <small>State, conditions, and recent experiment history</small>
+          </summary>
           <aside
             className="agent-state-panel"
             aria-labelledby="agent-state-heading"
@@ -355,7 +454,7 @@ export function AgentSessionShell({
             <dl className="agent-state-list">
               <div>
                 <dt>Profile</dt>
-                <dd>{stagedProfile?.displayName ?? session.stagedProfileId}</dd>
+                <dd>{stagedProfile?.displayName ?? "Not selected"}</dd>
               </div>
               <div>
                 <dt>Session</dt>
@@ -375,7 +474,11 @@ export function AgentSessionShell({
               <h3>Current conditions</h3>
               {current ? (
                 <ul>
-                  <li>{supportLabels[current.settings.supportMode]}</li>
+                  <li>
+                    {current.kind === "baseline"
+                      ? "Synthetic profile only · no adaptation"
+                      : supportLabels[current.settings.supportMode]}
+                  </li>
                   <li>{televisionLabels[current.settings.televisionState]}</li>
                   <li>{speakerLabels[current.settings.speakerPosition]}</li>
                 </ul>
@@ -414,25 +517,13 @@ export function AgentSessionShell({
               )}
             </details>
           </aside>
+        </details>
 
-          <div className="agent-human-surface">
-            {children ?? (
-              <section
-                className="agent-waiting-surface"
-                aria-label="Agent guidance status"
-              >
-                <p className="agent-kicker">Page controls</p>
-                <h2>Continue through the active control above</h2>
-                <p>
-                  Auralis exposes semantic options to the agent while all
-                  protected human actions remain visible on this page.
-                </p>
-              </section>
-            )}
-          </div>
-        </div>
-
-        <footer className="agent-session-footer">
+        <footer
+          className="agent-session-footer"
+          inert={volumeModalOpen ? true : undefined}
+          aria-hidden={volumeModalOpen ? true : undefined}
+        >
           <p>
             Synthetic and illustrative only · not a diagnosis, prediction, or
             treatment recommendation.

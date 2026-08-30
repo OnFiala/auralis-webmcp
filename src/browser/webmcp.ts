@@ -7,6 +7,8 @@ import {
   emptyToolInputSchema,
   getAuralisStateDataSchema,
   getSessionEvidenceDataSchema,
+  playListeningComparisonDataSchema,
+  playListeningComparisonInputSchema,
   prepareComparisonDataSchema,
   prepareComparisonInputSchema,
   recordUserObservationDataSchema,
@@ -15,11 +17,14 @@ import {
   stageDemoSessionInputSchema,
   type AuralisToolName,
   type AuralisToolResult,
+  type PlayListeningComparisonData,
 } from "../contracts/webmcp";
 import type { ExperienceController } from "../core/experience";
 import {
   getAuralisState,
   getSessionEvidence,
+  failWebMcpPlaybackRun,
+  playListeningComparison,
   prepareComparison,
   recordUserObservation,
   stageDemoSession,
@@ -71,6 +76,10 @@ export type AuralisWebMcpBinding = Readonly<{
   dispose(): void;
 }>;
 
+export type AuralisWebMcpPlaybackPort = Readonly<{
+  start(run: PlayListeningComparisonData): Promise<void>;
+}>;
+
 type ToolMetadata = Readonly<{
   title: string;
   description: string;
@@ -78,6 +87,9 @@ type ToolMetadata = Readonly<{
   inputSchema: ZodType;
   dataSchema: ZodType;
 }>;
+
+const WEBMCP_FIRST_INSTRUCTION =
+  "When a matching tool appears in allowedNextTools, use that WebMCP tool before Computer Use. Computer Use is fallback-only for an explicit visible human gate after approval, or when no matching WebMCP tool is allowed; never click to imitate an equivalent tool.";
 
 const TOOL_METADATA: Readonly<Record<AuralisToolName, ToolMetadata>> =
   Object.freeze({
@@ -92,7 +104,7 @@ const TOOL_METADATA: Readonly<Record<AuralisToolName, ToolMetadata>> =
     stage_demo_session: Object.freeze({
       title: "Stage family demo",
       description:
-        "Start or restage the bounded agent-guided family demo with one approved synthetic illustrative hearing profile. The first successful call activates the visible Agent Reveal. This tool does not supply consent, confirm the profile, load audio, acknowledge physical volume, or start playback.",
+        "Start the bounded agent-guided family demo without preselecting a profile. After visible human consent, call it again with select-profile to choose exactly one of the three approved synthetic profiles. A person may choose the same options on the page. Scene loading then starts automatically; comfortable-volume acknowledgement and the separate agent-playback grant remain visible human controls.",
       readOnly: false,
       inputSchema: stageDemoSessionInputSchema,
       dataSchema: stageDemoSessionDataSchema,
@@ -105,10 +117,18 @@ const TOOL_METADATA: Readonly<Record<AuralisToolName, ToolMetadata>> =
       inputSchema: prepareComparisonInputSchema,
       dataSchema: prepareComparisonDataSchema,
     }),
+    play_listening_comparison: Object.freeze({
+      title: "Play a listening comparison",
+      description:
+        "After the person explicitly grants agent playback on the visible page, start A, B, or the bounded A-then-B eight-second comparison. The page owns timed on-screen guidance and the person can stop immediately. Natural media end is required before playback counts as heard.",
+      readOnly: false,
+      inputSchema: playListeningComparisonInputSchema,
+      dataSchema: playListeningComparisonDataSchema,
+    }),
     record_user_observation: Object.freeze({
       title: "Record listening observation",
       description:
-        "Record a bounded report that the human explicitly provided after hearing the current comparison. This tool does not infer hearing ability or provide a diagnosis.",
+        "Translate only the person's stated everyday words into the bounded observation fields; never ask for enum names, infer hearing ability, or provide a diagnosis. If they report no clear difference or remain unsure, replay A then B with important-speaker focus before recording the observation.",
       readOnly: false,
       inputSchema: recordUserObservationInputSchema,
       dataSchema: recordUserObservationDataSchema,
@@ -131,6 +151,17 @@ const DEFAULT_EXECUTORS: Readonly<Record<AuralisToolName, ToolExecutor>> =
       stageDemoSession(controller, input, options),
     prepare_comparison: (controller, input, options) =>
       prepareComparison(controller, input, options),
+    play_listening_comparison: (controller, input, options) => {
+      const reserved = playListeningComparison(controller, input, options);
+      if (reserved.ok && !reserved.replayed) {
+        failWebMcpPlaybackRun(controller, reserved.data.runId);
+        const current = playListeningComparison(controller, input, options);
+        return current.ok
+          ? Object.freeze({ ...current, replayed: false as const })
+          : current;
+      }
+      return reserved;
+    },
     record_user_observation: (controller, input, options) =>
       recordUserObservation(controller, input, options),
     get_session_evidence: (controller, input) =>
@@ -195,7 +226,7 @@ export function createAuralisWebMcpTools(
       return Object.freeze({
         name,
         title: metadata.title,
-        description: metadata.description,
+        description: `${metadata.description} ${WEBMCP_FIRST_INSTRUCTION}`,
         inputSchema: jsonSchema(metadata.inputSchema),
         annotations: Object.freeze({
           readOnlyHint: metadata.readOnly,
@@ -225,6 +256,7 @@ export function createAuralisWebMcpTools(
 
 type RegistrationLifecycle = {
   controller: ExperienceController;
+  playbackPort: AuralisWebMcpPlaybackPort | null;
   abortController: AbortController | null;
   references: number;
   teardownQueued: boolean;
@@ -279,6 +311,7 @@ function bindingFor(
 export function registerAuralisWebMcpTools(options: {
   controller: ExperienceController;
   document?: AuralisWebMcpHostDocument | null;
+  playbackPort?: AuralisWebMcpPlaybackPort | null;
 }): AuralisWebMcpBinding {
   const host =
     options.document ??
@@ -297,7 +330,10 @@ export function registerAuralisWebMcpTools(options: {
   const hostKey = host as object;
   const existing = registrationLifecycles.get(hostKey);
   if (existing) {
-    if (existing.controller !== options.controller) {
+    if (
+      existing.controller !== options.controller ||
+      existing.playbackPort !== (options.playbackPort ?? null)
+    ) {
       return inertBinding("rejected");
     }
     existing.references += 1;
@@ -308,6 +344,7 @@ export function registerAuralisWebMcpTools(options: {
     typeof AbortController === "function" ? new AbortController() : null;
   const lifecycle = {
     controller: options.controller,
+    playbackPort: options.playbackPort ?? null,
     abortController,
     references: 1,
     teardownQueued: false,
@@ -316,7 +353,35 @@ export function registerAuralisWebMcpTools(options: {
 
   lifecycle.status = (async () => {
     try {
-      for (const tool of createAuralisWebMcpTools(options.controller)) {
+      const playbackExecutor: ToolExecutor = async (
+        controller,
+        input,
+        executeOptions,
+      ) => {
+        const reserved = playListeningComparison(
+          controller,
+          input,
+          executeOptions,
+        );
+        if (!reserved.ok || reserved.replayed) {
+          return reserved;
+        }
+        try {
+          if (!options.playbackPort) {
+            throw new Error("No page playback port is available.");
+          }
+          await options.playbackPort.start(reserved.data);
+        } catch {
+          failWebMcpPlaybackRun(controller, reserved.data.runId);
+        }
+        const current = playListeningComparison(controller, input, executeOptions);
+        return current.ok
+          ? Object.freeze({ ...current, replayed: false as const })
+          : current;
+      };
+      for (const tool of createAuralisWebMcpTools(options.controller, {
+        play_listening_comparison: playbackExecutor,
+      })) {
         if (abortController?.signal.aborted) return "rejected";
         await modelContext.registerTool(
           tool,

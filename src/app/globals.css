@@ -3560,3 +3560,1631 @@ main.agent-session-shell {
     animation: none;
   }
 }
+
+/* DESIGN-LOCK 2 — Resonant Canvas
+   The family scene is the agent session surface; controls sit on the scene
+   instead of turning the guided experience into a dashboard. */
+main.agent-session-shell {
+  --agent-accent: #53d8c8;
+  --agent-accent-strong: #8af3e8;
+  --agent-ink: #f7fbfa;
+  --agent-muted: #a9c1bd;
+  --agent-panel: rgb(3 19 18 / 88%);
+  --agent-border: rgb(107 220 206 / 30%);
+
+  min-height: 100svh;
+  padding: 0;
+  background: #041210;
+}
+
+.agent-scene-backdrop,
+.agent-scene-scrim {
+  position: absolute;
+  top: 5rem;
+  right: 0;
+  left: 0;
+  height: max(calc(100svh - 5rem), 52rem);
+  pointer-events: none;
+}
+
+.agent-scene-backdrop {
+  z-index: -4;
+  overflow: hidden;
+}
+
+.agent-scene-backdrop-image {
+  object-fit: cover;
+  object-position: center 46%;
+  transform: scale(1);
+  animation: agent-scene-arrive 1100ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.agent-scene-scrim {
+  z-index: -3;
+  background: rgb(1 13 12 / 44%);
+}
+
+.agent-reveal-wash {
+  z-index: -2;
+  inset: 5rem 0 auto;
+  height: max(calc(100svh - 5rem), 52rem);
+  background: rgb(18 96 88 / 18%);
+  transform-origin: 50% 45%;
+}
+
+.agent-session-header {
+  min-height: 5rem;
+  padding: 0.72rem clamp(1rem, 2.5vw, 2.1rem);
+  border-color: rgb(143 211 202 / 20%);
+  background: rgb(2 14 13 / 86%);
+  backdrop-filter: blur(16px);
+}
+
+.agent-session-brand {
+  font-size: clamp(1.25rem, 2vw, 1.8rem);
+}
+
+.agent-session-mode strong {
+  font-size: clamp(0.95rem, 1.6vw, 1.18rem);
+}
+
+.agent-stop-button {
+  min-width: 10.8rem;
+  min-height: 3.15rem;
+  border-color: #ff3d45;
+  border-radius: 0.72rem;
+  background: #ef202b;
+  box-shadow: 0 0.7rem 1.8rem rgb(94 0 8 / 22%);
+}
+
+.agent-session-content {
+  display: grid;
+  grid-template-columns: minmax(6rem, 8.5rem) minmax(0, 1fr);
+  grid-template-rows: auto minmax(27.5rem, 1fr) auto auto auto auto;
+  column-gap: clamp(1.25rem, 3vw, 3.5rem);
+  width: 100%;
+  min-height: calc(100svh - 5rem);
+  padding: 4rem clamp(1.25rem, 2.5vw, 2.5rem) 1.25rem;
+}
+
+.agent-chapters {
+  grid-row: 1 / 5;
+  grid-column: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-self: start;
+  width: 100%;
+  height: clamp(29rem, 51svh, 32rem);
+  min-height: 0;
+  margin: 0;
+  padding: 0.5rem 0 1rem;
+}
+
+.agent-chapters li {
+  display: grid;
+  justify-items: center;
+  gap: 0.48rem;
+  color: #9aacab;
+  font-size: 0.78rem;
+  text-align: center;
+}
+
+.agent-chapters li::after {
+  top: 2rem;
+  right: auto;
+  bottom: calc(-50% - 1.55rem);
+  left: 50%;
+  width: 1px;
+  height: auto;
+  background: #4a7771;
+}
+
+.agent-chapters li > span {
+  width: 2.15rem;
+  height: 2.15rem;
+  background: rgb(4 25 23 / 88%);
+}
+
+.agent-chapters li[data-status="current"] > span {
+  background: #082622;
+  color: var(--agent-accent-strong);
+  box-shadow:
+    0 0 0 0.3rem rgb(79 214 200 / 16%),
+    0 0 1.4rem rgb(79 214 200 / 38%);
+}
+
+.agent-next-action {
+  grid-row: 1;
+  grid-column: 2;
+  align-self: start;
+  width: min(100%, 66rem);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.agent-next-action h1 {
+  max-width: 22ch;
+  color: #ffffff;
+  font-size: clamp(2.4rem, 4vw, 3.5rem);
+  line-height: 0.98;
+  text-wrap: balance;
+  text-shadow: 0 0.2rem 1.5rem rgb(0 0 0 / 45%);
+}
+
+.agent-next-action > div:first-child > p:last-child {
+  max-width: 45rem;
+  color: #bdeee7;
+  font-size: clamp(0.98rem, 1.65vw, 1.25rem);
+  text-shadow: 0 0.12rem 0.9rem rgb(0 0 0 / 72%);
+}
+
+.agent-next-action .agent-kicker {
+  color: var(--agent-accent-strong);
+}
+
+.agent-control-channels {
+  align-self: start;
+}
+
+.agent-control-channels span {
+  border-color: rgb(129 219 207 / 34%);
+  background: rgb(2 17 15 / 58%);
+  color: #e0f3ef;
+  backdrop-filter: blur(8px);
+}
+
+.agent-visible-state {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1.2rem;
+  margin: -0.25rem 0 0;
+  padding: 0;
+  color: #e4f2ef;
+}
+
+.agent-visible-state div {
+  display: flex;
+  gap: 0.35rem;
+  align-items: baseline;
+}
+
+.agent-visible-state dt,
+.agent-visible-state dd {
+  margin: 0;
+  font-size: 0.69rem;
+}
+
+.agent-visible-state dt {
+  color: #8faea9;
+}
+
+.agent-visible-state dd {
+  color: #e5f6f2;
+  font-weight: 750;
+  text-transform: capitalize;
+}
+
+.agent-human-gate,
+.agent-staged-action {
+  max-width: 62rem;
+  border-color: rgb(95 225 208 / 36%);
+  background: rgb(3 25 23 / 80%);
+  box-shadow: 0 0.8rem 2rem rgb(0 0 0 / 22%);
+  backdrop-filter: blur(12px);
+}
+
+main[data-agent-phase="awaiting_baseline_listening"] .agent-human-gate,
+main[data-agent-phase="awaiting_comparison_listening"] .agent-human-gate {
+  width: fit-content;
+  min-height: 2.7rem;
+  padding: 0.25rem 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+main[data-agent-phase="awaiting_baseline_listening"] .agent-human-gate strong,
+main[data-agent-phase="awaiting_comparison_listening"] .agent-human-gate strong {
+  color: var(--agent-accent-strong);
+  font-size: 0.74rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+main[data-agent-phase="awaiting_baseline_listening"] .agent-human-gate p,
+main[data-agent-phase="awaiting_comparison_listening"] .agent-human-gate p {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.agent-scene-conditions {
+  grid-row: 3;
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0;
+  align-items: center;
+  justify-content: center;
+  width: min(100%, 66rem);
+  margin: 0 auto 0.8rem;
+  color: #edf9f7;
+}
+
+.agent-scene-conditions span {
+  position: relative;
+  padding: 0.25rem clamp(0.8rem, 2vw, 1.8rem);
+  font-size: clamp(0.76rem, 1.15vw, 0.95rem);
+  font-weight: 750;
+  text-shadow: 0 0.1rem 0.75rem rgb(0 0 0 / 85%);
+}
+
+.agent-scene-conditions span + span {
+  border-left: 1px solid rgb(104 215 201 / 34%);
+}
+
+.agent-scene-conditions span::before {
+  display: inline-block;
+  width: 0.55rem;
+  height: 0.55rem;
+  margin-right: 0.55rem;
+  border: 1px solid var(--agent-accent);
+  border-radius: 50%;
+  background: rgb(72 207 190 / 34%);
+  content: "";
+}
+
+.agent-session-grid {
+  grid-row: 4;
+  grid-column: 1 / -1;
+  display: block;
+  width: min(100%, 85rem);
+  margin: 0 auto;
+}
+
+main[data-agent-phase="awaiting_profile_selection"] .agent-session-grid,
+main[data-agent-phase="awaiting_scene_load"] .agent-session-grid,
+main[data-agent-phase="awaiting_volume_acknowledgement"] .agent-session-grid {
+  grid-row: 2;
+  grid-column: 2;
+  align-self: center;
+  width: min(100%, 66rem);
+  margin: 1.5rem 0 0;
+}
+
+main[data-agent-phase="awaiting_profile_selection"] .agent-session-details,
+main[data-agent-phase="awaiting_scene_load"] .agent-session-details,
+main[data-agent-phase="awaiting_volume_acknowledgement"] .agent-session-details {
+  grid-row: 3;
+}
+
+main[data-agent-phase="awaiting_profile_selection"] .agent-session-footer,
+main[data-agent-phase="awaiting_scene_load"] .agent-session-footer,
+main[data-agent-phase="awaiting_volume_acknowledgement"] .agent-session-footer {
+  grid-row: 4;
+}
+
+.agent-profile-selection,
+.agent-scene-loading,
+.agent-volume-dialog {
+  border: 1px solid var(--agent-border);
+  border-radius: 1.15rem;
+  background: rgb(2 18 16 / 90%);
+  color: var(--agent-ink);
+  box-shadow: 0 1rem 3rem rgb(0 0 0 / 34%);
+  backdrop-filter: blur(16px);
+}
+
+.agent-profile-selection {
+  padding: clamp(1rem, 2.2vw, 1.5rem);
+}
+
+.agent-profile-selection-heading {
+  display: grid;
+  gap: 0.35rem;
+  max-width: 47rem;
+  margin-bottom: 1rem;
+}
+
+.agent-profile-selection-heading h2,
+.agent-scene-loading h2,
+.agent-volume-dialog h2 {
+  margin: 0;
+  color: #ffffff;
+  font-size: clamp(1.45rem, 2.6vw, 2.1rem);
+  line-height: 1.08;
+}
+
+.agent-profile-selection-heading p,
+.agent-scene-loading p,
+.agent-volume-dialog p {
+  margin: 0;
+  color: #bad0cc;
+}
+
+.agent-profile-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.8rem;
+}
+
+.agent-profile-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 1rem;
+  border: 1px solid rgb(112 213 200 / 24%);
+  border-radius: 0.9rem;
+  background: rgb(255 255 255 / 5%);
+}
+
+.agent-profile-card h3 {
+  margin: 0.25rem 0 0.55rem;
+  color: #ffffff;
+  font-size: 1.1rem;
+}
+
+.agent-profile-card > p:not(.agent-profile-classification) {
+  color: #c9dad7;
+  font-size: 0.88rem;
+}
+
+.agent-profile-classification {
+  margin: 0;
+  color: var(--agent-accent-strong);
+  font-size: 0.67rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.agent-profile-card dl {
+  margin: 0.85rem 0 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid rgb(112 213 200 / 18%);
+}
+
+.agent-profile-card dt {
+  color: #83a8a2;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.agent-profile-card dd {
+  margin: 0.25rem 0 0;
+  color: #dceae7;
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.agent-profile-card button {
+  width: 100%;
+  margin-top: auto;
+}
+
+.agent-profile-card .audiogram-figure-compact {
+  margin: 0.15rem 0 0.7rem;
+  padding: 0.4rem 0.5rem 0.25rem;
+  border-color: rgb(112 213 200 / 26%);
+  border-radius: 0.72rem;
+  background: rgb(238 250 247 / 96%);
+}
+
+.audiogram-figure-compact .audiogram-heading-row {
+  min-height: 1.25rem;
+  align-items: center;
+}
+
+.audiogram-figure-compact .audiogram-heading-row > div,
+.audiogram-figure-compact figcaption,
+.audiogram-figure-compact .audiogram-plot-note {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.audiogram-figure-compact .audiogram-legend {
+  width: 100%;
+  justify-content: flex-end;
+  gap: 0.55rem;
+  font-size: 0.62rem;
+}
+
+.audiogram-figure-compact .audiogram-legend span {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+.audiogram-figure-compact .audiogram-legend svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.audiogram-figure-compact .audiogram-chart {
+  width: 100%;
+  max-height: 8.8rem;
+  margin: -0.35rem auto 0;
+}
+
+.agent-profile-limitation {
+  margin: 0.9rem 0 0;
+  color: #91aaa5;
+  font-size: 0.75rem;
+}
+
+.agent-scene-loading,
+.agent-volume-dialog {
+  width: min(100%, 37rem);
+  margin: 0 auto;
+  padding: clamp(1.25rem, 3vw, 2rem);
+}
+
+.agent-scene-loading {
+  display: grid;
+  justify-items: start;
+  gap: 0.75rem;
+}
+
+.agent-loading-indicator {
+  width: 100%;
+  height: 0.22rem;
+  margin-top: 0.4rem;
+  background: var(--agent-accent);
+  transform-origin: left;
+  animation: agent-loading-progress 1.4s ease-in-out infinite alternate;
+}
+
+.agent-volume-dialog {
+  display: grid;
+  gap: 0.85rem;
+  border-color: rgb(112 230 215 / 48%);
+}
+
+.agent-volume-safety-note {
+  padding-top: 0.85rem;
+  border-top: 1px solid rgb(112 213 200 / 22%);
+  font-size: 0.82rem;
+}
+
+.agent-playback-grant {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  padding: 0.8rem;
+  border: 1px solid rgb(112 213 200 / 26%);
+  border-radius: 0.8rem;
+  background: rgb(255 255 255 / 5%);
+  cursor: pointer;
+}
+
+.agent-playback-grant input {
+  width: 1.15rem;
+  height: 1.15rem;
+  margin-top: 0.1rem;
+  accent-color: var(--agent-accent);
+}
+
+.agent-playback-grant span {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.agent-playback-grant strong {
+  color: #ffffff;
+  font-size: 0.86rem;
+}
+
+.agent-playback-grant small {
+  color: #a9c5c0;
+  font-size: 0.74rem;
+  line-height: 1.4;
+}
+
+.agent-volume-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+  margin-top: 0.35rem;
+}
+
+.agent-volume-reset {
+  border-color: rgb(179 210 204 / 35%);
+  background: transparent;
+  color: #dceae7;
+}
+
+.agent-human-surface > .experience-screen {
+  min-height: auto;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--agent-ink);
+}
+
+.agent-human-surface > .scene-screen > .step-label,
+.agent-human-surface > .scene-screen > .screen-heading,
+.agent-human-surface > .scene-screen > .screen-introduction {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.agent-human-surface > .explanation-screen {
+  padding: clamp(1rem, 2vw, 1.5rem);
+  border: 1px solid rgb(101 196 184 / 30%);
+  border-radius: 1.1rem;
+  background: rgb(247 251 250 / 96%);
+  color: #172523;
+  box-shadow: 0 1rem 3rem rgb(0 0 0 / 32%);
+}
+
+.agent-human-surface > .experience-screen,
+.agent-waiting-surface {
+  min-height: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--agent-ink);
+}
+
+.agent-waiting-surface {
+  padding: 1rem 1.15rem;
+  border: 1px solid var(--agent-border);
+  border-radius: 1rem;
+  background: rgb(2 18 16 / 82%);
+  backdrop-filter: blur(12px);
+}
+
+.agent-waiting-surface h2 {
+  margin-bottom: 0.2rem;
+  color: #ffffff;
+}
+
+.agent-session-details {
+  grid-row: 5;
+  grid-column: 1 / -1;
+  width: min(100%, 78rem);
+  margin: 2.5rem auto 0;
+  border: 1px solid var(--agent-border);
+  border-radius: 1rem;
+  background: rgb(2 18 16 / 88%);
+  color: var(--agent-ink);
+  backdrop-filter: blur(14px);
+}
+
+.agent-session-details > summary {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.9rem 1rem;
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.agent-session-details > summary small {
+  color: var(--agent-muted);
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.agent-state-panel {
+  display: grid;
+  grid-template-columns: 1.15fr 1fr 1fr;
+  gap: 1rem;
+  padding: 1rem;
+  border: 0;
+  border-top: 1px solid var(--agent-border);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.agent-panel-heading,
+.agent-history {
+  grid-column: 1 / -1;
+}
+
+.agent-state-list,
+.agent-condition-card {
+  margin: 0;
+}
+
+.agent-session-footer {
+  grid-row: 6;
+  grid-column: 1 / -1;
+  width: min(100%, 78rem);
+  margin: 0 auto;
+  padding-top: 1rem;
+}
+
+/* The shell already carries the scene, heading, and state. Keep the native
+   controls and semantics, but make the playback surface the visual dock. */
+.agent-human-surface > .listening-screen > .step-label,
+.agent-human-surface > .listening-screen > .screen-heading,
+.agent-human-surface > .listening-screen > .same-source-line,
+.agent-human-surface > .listening-screen > .screen-introduction,
+.agent-human-surface > .listening-screen > .listening-scene-strip,
+.agent-human-surface > .interventions-screen > .step-label,
+.agent-human-surface > .interventions-screen > .screen-heading,
+.agent-human-surface > .interventions-screen > .screen-introduction,
+.agent-human-surface > .interventions-screen > .intervention-control-grid,
+.agent-human-surface > .interventions-screen > .intervention-visual-grid {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.agent-human-surface .ab-playback-grid,
+.agent-human-surface .intervention-listening-dock {
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid rgb(88 217 201 / 42%);
+  border-radius: 1.35rem;
+  background: rgb(1 18 16 / 90%);
+  box-shadow: 0 1rem 3rem rgb(0 0 0 / 36%);
+  backdrop-filter: blur(16px);
+}
+
+.agent-human-surface .ab-playback-grid {
+  gap: 0;
+}
+
+.agent-human-surface .listening-transport-status {
+  grid-column: 1 / -1;
+  min-height: 3rem;
+  margin: 0;
+  padding: 0.72rem 1rem;
+  border: 0;
+  border-bottom: 1px solid rgb(88 217 201 / 30%);
+  border-left: 0.36rem solid var(--agent-accent);
+  border-radius: 0;
+  background: rgb(1 18 16 / 96%);
+  color: #ffffff;
+  font-size: clamp(0.9rem, 1.25vw, 1.08rem);
+  font-weight: 850;
+  letter-spacing: 0.01em;
+  line-height: 1.35;
+}
+
+.agent-human-surface .listening-transport-status-preparing {
+  border-left-color: #e7b95f;
+  background: rgb(43 31 7 / 94%);
+}
+
+.agent-human-surface .listening-transport-status-playing {
+  border-left-color: #65eadb;
+  background: linear-gradient(90deg, rgb(10 70 62 / 98%), rgb(1 18 16 / 94%));
+  box-shadow: inset 0 0 1.7rem rgb(74 226 208 / 13%);
+}
+
+.agent-human-surface .listening-transport-status-transition {
+  border-left-color: #f0c878;
+  background: linear-gradient(90deg, rgb(72 49 11 / 98%), rgb(1 18 16 / 94%));
+}
+
+.guided-listening-control,
+.agent-listening-cue,
+.agent-observation-prompt,
+.agent-adaptation-choice,
+.agent-recovery-action {
+  border: 1px solid rgb(88 217 201 / 34%);
+  background: rgb(1 18 16 / 92%);
+  color: #eaf8f5;
+  backdrop-filter: blur(16px);
+}
+
+.guided-listening-control {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.8rem 1rem;
+  border-width: 1px 0 0;
+}
+
+.agent-human-surface .guided-listening-control {
+  min-height: 3.25rem;
+  padding: 0.52rem 0.8rem;
+}
+
+.agent-human-surface .guided-listening-control > div {
+  display: flex;
+  gap: 0.65rem;
+  align-items: baseline;
+}
+
+.agent-human-surface .guided-listening-control .agent-kicker,
+.agent-human-surface .guided-listening-control span {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.guided-listening-control > div {
+  display: grid;
+  gap: 0.18rem;
+}
+
+.guided-listening-control strong {
+  color: #ffffff;
+  font-size: 0.95rem;
+}
+
+.guided-listening-control span {
+  color: #a9c5c0;
+  font-size: 0.76rem;
+}
+
+.guided-listening-control button,
+.agent-observation-options button,
+.agent-adaptation-options button,
+.agent-recovery-action button {
+  min-height: 2.65rem;
+  border-color: var(--agent-accent);
+  background: rgb(23 105 94 / 82%);
+  color: #ffffff;
+}
+
+.agent-listening-cue {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.75rem 1rem;
+  border-width: 1px 0 0;
+  border-color: rgb(88 217 201 / 24%);
+}
+
+.agent-human-surface .agent-listening-cue {
+  min-height: 2.7rem;
+  padding: 0.52rem 0.85rem;
+}
+
+.agent-listening-cue strong {
+  color: #dffbf6;
+  font-size: 0.83rem;
+  line-height: 1.45;
+}
+
+.agent-listening-cue span {
+  color: #93b9b2;
+  font-size: 0.73rem;
+}
+
+.agent-observation-prompt {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(15rem, 0.72fr) minmax(0, 1.28fr);
+  gap: 1rem;
+  padding: 1rem;
+  border-width: 1px 0 0;
+}
+
+.agent-observation-prompt h3,
+.agent-adaptation-choice h2,
+.agent-recovery-action h2 {
+  margin: 0.15rem 0 0.3rem;
+  color: #ffffff;
+}
+
+.agent-observation-prompt p,
+.agent-adaptation-choice p,
+.agent-recovery-action p {
+  margin: 0;
+  color: #a9c5c0;
+}
+
+.agent-observation-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.agent-observation-options button {
+  padding: 0.65rem 0.75rem;
+  font-size: 0.76rem;
+  line-height: 1.3;
+  text-align: left;
+}
+
+.agent-observation-options .agent-no-difference-button {
+  border-color: rgb(167 211 204 / 42%);
+  background: rgb(255 255 255 / 7%);
+}
+
+.agent-observation-options .agent-continue-unsure-button {
+  border-color: #d1ab63;
+  background: rgb(116 76 24 / 48%);
+}
+
+.agent-adaptation-listening-loop {
+  overflow: hidden;
+  border-radius: 0 0 1.35rem 1.35rem;
+}
+
+.agent-adaptation-choice,
+.agent-recovery-action {
+  padding: clamp(1rem, 2vw, 1.4rem);
+  border-radius: 1.1rem;
+  box-shadow: 0 1rem 3rem rgb(0 0 0 / 32%);
+}
+
+.agent-adaptation-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.7rem;
+  margin-top: 0;
+}
+
+.agent-adaptation-options article {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.9rem;
+  border: 1px solid rgb(88 217 201 / 24%);
+  border-radius: 0.85rem;
+  background: rgb(255 255 255 / 5%);
+}
+
+.agent-adaptation-options h3 {
+  margin: 0;
+  color: #ffffff;
+  font-size: 1rem;
+}
+
+.agent-adaptation-options small {
+  color: #9bc0ba;
+  line-height: 1.4;
+}
+
+.agent-adaptation-options button {
+  width: 100%;
+  margin-top: auto;
+}
+
+.agent-recovery-action {
+  display: grid;
+  justify-items: start;
+  gap: 0.65rem;
+}
+
+main[data-agent-phase="awaiting_baseline_listening"] .agent-session-content,
+main[data-agent-phase="awaiting_baseline_observation"] .agent-session-content,
+main[data-agent-phase="awaiting_comparison_listening"] .agent-session-content,
+main[data-agent-phase="awaiting_comparison_observation"] .agent-session-content {
+  grid-template-rows: auto auto auto auto auto;
+  padding-top: 2.1rem;
+}
+
+main[data-agent-phase="awaiting_baseline_listening"] .agent-chapters,
+main[data-agent-phase="awaiting_baseline_observation"] .agent-chapters,
+main[data-agent-phase="awaiting_comparison_listening"] .agent-chapters,
+main[data-agent-phase="awaiting_comparison_observation"] .agent-chapters {
+  grid-row: 1 / 4;
+  height: clamp(23rem, 44svh, 29rem);
+}
+
+main[data-agent-phase="awaiting_baseline_listening"] .agent-scene-conditions,
+main[data-agent-phase="awaiting_baseline_observation"] .agent-scene-conditions,
+main[data-agent-phase="awaiting_comparison_listening"] .agent-scene-conditions,
+main[data-agent-phase="awaiting_comparison_observation"] .agent-scene-conditions {
+  grid-row: 2;
+  margin-top: 1rem;
+}
+
+main[data-agent-phase="awaiting_baseline_listening"] .agent-session-grid,
+main[data-agent-phase="awaiting_baseline_observation"] .agent-session-grid,
+main[data-agent-phase="awaiting_comparison_listening"] .agent-session-grid,
+main[data-agent-phase="awaiting_comparison_observation"] .agent-session-grid {
+  grid-row: 3;
+  margin-top: 0;
+}
+
+main[data-agent-phase="awaiting_baseline_listening"] .agent-session-details,
+main[data-agent-phase="awaiting_baseline_observation"] .agent-session-details,
+main[data-agent-phase="awaiting_comparison_listening"] .agent-session-details,
+main[data-agent-phase="awaiting_comparison_observation"] .agent-session-details {
+  grid-row: 4;
+}
+
+main[data-agent-phase="awaiting_baseline_listening"] .agent-session-footer,
+main[data-agent-phase="awaiting_baseline_observation"] .agent-session-footer,
+main[data-agent-phase="awaiting_comparison_listening"] .agent-session-footer,
+main[data-agent-phase="awaiting_comparison_observation"] .agent-session-footer {
+  grid-row: 5;
+}
+
+main[data-agent-phase="ready_for_baseline"] .agent-session-content,
+main[data-agent-phase="ready_for_adaptation"] .agent-session-content {
+  grid-template-rows: auto auto auto auto auto;
+  padding-top: 2.1rem;
+}
+
+main[data-agent-phase="ready_for_baseline"] .agent-chapters,
+main[data-agent-phase="ready_for_adaptation"] .agent-chapters {
+  grid-row: 1 / 4;
+  height: clamp(23rem, 44svh, 29rem);
+}
+
+main[data-agent-phase="ready_for_baseline"] .agent-scene-conditions,
+main[data-agent-phase="ready_for_adaptation"] .agent-scene-conditions {
+  grid-row: 2;
+  margin-top: 1rem;
+}
+
+main[data-agent-phase="ready_for_baseline"] .agent-session-grid,
+main[data-agent-phase="ready_for_adaptation"] .agent-session-grid {
+  grid-row: 3;
+  margin-top: 0;
+}
+
+main[data-agent-phase="ready_for_baseline"] .agent-session-details,
+main[data-agent-phase="ready_for_adaptation"] .agent-session-details {
+  grid-row: 4;
+}
+
+main[data-agent-phase="ready_for_baseline"] .agent-session-footer,
+main[data-agent-phase="ready_for_adaptation"] .agent-session-footer {
+  grid-row: 5;
+}
+
+main[data-agent-phase="ready_for_adaptation"] .agent-session-details,
+main[data-agent-phase="awaiting_comparison_listening"] .agent-session-details,
+main[data-agent-phase="awaiting_comparison_observation"] .agent-session-details {
+  display: none;
+}
+
+@media (min-width: 44.01rem) {
+  main[data-agent-phase="awaiting_baseline_listening"] .agent-session-grid,
+  main[data-agent-phase="awaiting_baseline_observation"] .agent-session-grid,
+  main[data-agent-phase="awaiting_comparison_listening"] .agent-session-grid,
+  main[data-agent-phase="awaiting_comparison_observation"] .agent-session-grid {
+    margin-top: clamp(3rem, 7svh, 4.75rem);
+  }
+
+  main[data-agent-phase="ready_for_adaptation"] .agent-session-grid {
+    margin-top: clamp(2rem, 5svh, 3.5rem);
+  }
+}
+
+.agent-human-surface .ab-playback-card {
+  display: grid;
+  grid-template-areas:
+    "heading state"
+    "conditions action";
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.45rem 1rem;
+  align-items: center;
+  min-height: 6.25rem;
+  padding: 0.72rem 0.85rem;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: #ffffff;
+}
+
+.agent-human-surface .ab-playback-card-playing {
+  background: linear-gradient(105deg, rgb(27 119 105 / 34%), rgb(255 255 255 / 3%));
+  box-shadow:
+    inset 0 0 0 2px rgb(94 237 220 / 84%),
+    inset 0 0 2.4rem rgb(64 224 205 / 14%);
+}
+
+.agent-human-surface .ab-playback-card-preparing {
+  background: linear-gradient(105deg, rgb(104 70 13 / 36%), rgb(255 255 255 / 2%));
+  box-shadow: inset 0 0 0 1px rgb(231 185 95 / 72%);
+}
+
+.agent-human-surface .ab-card-heading {
+  grid-area: heading;
+  min-width: 0;
+}
+
+.agent-human-surface .ab-card-letter {
+  width: 2.4rem;
+  height: 2.4rem;
+}
+
+.agent-human-surface .ab-card-heading h3 {
+  font-size: 1.05rem;
+}
+
+.agent-human-surface .ab-card-description,
+.agent-human-surface .ab-support-note {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.agent-human-surface .ab-condition-list {
+  grid-area: conditions;
+  gap: 0.25rem 0.7rem;
+  margin: 0;
+}
+
+.agent-human-surface .ab-condition-list dt,
+.agent-human-surface .ab-condition-list dd {
+  font-size: 0.7rem;
+}
+
+.agent-human-surface .ab-card-state {
+  grid-area: state;
+  justify-self: end;
+  margin: 0;
+  padding: 0.28rem 0.52rem;
+  border: 1px solid rgb(118 211 199 / 24%);
+  border-radius: 999px;
+  background: rgb(255 255 255 / 5%);
+  font-size: 0.7rem;
+  letter-spacing: 0.035em;
+  text-transform: uppercase;
+}
+
+.agent-human-surface .ab-playback-card-playing .ab-card-state {
+  border-color: #65eadb;
+  background: #65eadb;
+  color: #032b26;
+}
+
+.agent-human-surface .ab-play-button {
+  grid-area: action;
+  width: auto;
+  min-width: 5.6rem;
+  min-height: 2.5rem;
+  margin: 0;
+  padding: 0.45rem 0.78rem;
+  font-size: 0.83rem;
+}
+
+.agent-human-surface .ab-playback-card + .ab-playback-card {
+  border-left: 1px solid rgb(88 217 201 / 28%);
+}
+
+.agent-human-surface .ab-card-letter {
+  border: 1px solid rgb(106 229 214 / 44%);
+  background: rgb(73 213 195 / 14%);
+  color: var(--agent-accent-strong);
+}
+
+.agent-human-surface .ab-card-heading h3,
+.agent-human-surface .ab-condition-list dd {
+  color: #ffffff;
+}
+
+.agent-human-surface .ab-card-kicker,
+.agent-human-surface .ab-card-description,
+.agent-human-surface .ab-condition-list dt,
+.agent-human-surface .ab-card-state,
+.agent-human-surface .ab-support-note {
+  color: #a9c5c0;
+}
+
+.agent-human-surface .ab-play-button,
+.agent-human-surface .intervention-ab-card button {
+  border-color: var(--agent-accent);
+  background: rgb(23 105 94 / 78%);
+  color: #ffffff;
+}
+
+.agent-human-surface .ab-play-button:hover:not(:disabled),
+.agent-human-surface .intervention-ab-card button:hover:not(:disabled) {
+  background: #257f72;
+}
+
+.agent-human-surface .listening-support-selector,
+.agent-human-surface .listening-transport-status,
+.agent-human-surface .listening-volume-confirmation,
+.agent-human-surface .listening-details,
+.agent-human-surface .listening-limitation,
+.agent-human-surface .intervention-transport-status,
+.agent-human-surface .intervention-limitation {
+  color: #d8eae6;
+}
+
+.agent-human-surface .listening-details {
+  display: block;
+  margin-top: 0.55rem;
+}
+
+.agent-human-surface .listening-details > .technical-detail {
+  padding: 0;
+  border: 0;
+  background: rgb(1 18 16 / 64%);
+}
+
+.agent-human-surface .listening-details > .technical-detail > summary {
+  padding: 0.58rem 0.75rem;
+  color: #a9c5c0;
+  font-size: 0.74rem;
+}
+
+.agent-human-surface .technical-limitation {
+  margin: 0.75rem;
+  color: #a9c5c0;
+  font-size: 0.74rem;
+}
+
+.agent-human-surface .listening-support-selector,
+.agent-human-surface .listening-details > *,
+.agent-human-surface .intervention-transport-status {
+  border-color: rgb(101 196 184 / 26%);
+  background: rgb(2 18 16 / 82%);
+}
+
+.agent-human-surface .listening-support-selector legend,
+.agent-human-surface .listening-support-options strong,
+.agent-human-surface .listening-details strong {
+  color: #ffffff;
+}
+
+.agent-human-surface .listening-support-options label {
+  background: rgb(255 255 255 / 5%);
+}
+
+.agent-human-surface .listening-support-options small,
+.agent-human-surface .listening-support-limitation,
+.agent-human-surface .listening-volume-confirmation,
+.agent-human-surface .listening-limitation,
+.agent-human-surface .intervention-limitation {
+  color: #a9c5c0;
+}
+
+.agent-human-surface .intervention-listening-dock {
+  padding: 0;
+  border-radius: 1.35rem 1.35rem 0 0;
+}
+
+.agent-human-surface .intervention-dock-heading {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.agent-human-surface .intervention-dock-heading h3,
+.agent-human-surface .intervention-ab-card h4 {
+  color: #ffffff;
+}
+
+.agent-human-surface .intervention-dock-heading p,
+.agent-human-surface .intervention-ab-card p {
+  color: #a9c5c0;
+}
+
+.agent-human-surface .intervention-ab-grid {
+  grid-template-columns: minmax(12rem, 0.32fr) minmax(0, 0.68fr);
+  gap: 0;
+  margin: 0;
+}
+
+.agent-human-surface .intervention-ab-card {
+  min-height: 6.4rem;
+  padding: 0.9rem 1rem;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.agent-human-surface .intervention-ab-card + .intervention-ab-card {
+  border-left: 1px solid rgb(88 217 201 / 24%);
+}
+
+.agent-human-surface .intervention-transport-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.agent-human-surface .intervention-limitation {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+@keyframes agent-scene-arrive {
+  from {
+    opacity: 0;
+    transform: scale(1.06);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes agent-loading-progress {
+  from {
+    opacity: 0.35;
+    transform: scaleX(0.22);
+  }
+  to {
+    opacity: 1;
+    transform: scaleX(1);
+  }
+}
+
+@media (max-width: 62rem) {
+  .agent-session-content {
+    grid-template-columns: 5.5rem minmax(0, 1fr);
+    column-gap: 1rem;
+  }
+
+  .agent-state-panel {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .agent-profile-options {
+    grid-template-columns: 1fr;
+  }
+
+  .agent-adaptation-options {
+    grid-template-columns: 1fr;
+  }
+
+  main[data-agent-phase="awaiting_profile_selection"] .agent-session-grid,
+  main[data-agent-phase="awaiting_scene_load"] .agent-session-grid,
+  main[data-agent-phase="awaiting_volume_acknowledgement"] .agent-session-grid {
+    grid-column: 2;
+  }
+
+  .agent-human-surface .ab-playback-grid,
+  .agent-human-surface .intervention-ab-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .agent-human-surface .ab-playback-card + .ab-playback-card,
+  .agent-human-surface .intervention-ab-card + .intervention-ab-card {
+    border-top: 1px solid rgb(88 217 201 / 24%);
+    border-left: 0;
+  }
+
+  .agent-observation-prompt {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 44rem) {
+  .agent-scene-backdrop,
+  .agent-scene-scrim,
+  .agent-reveal-wash {
+    height: max(calc(100svh - 7.4rem), 58rem);
+  }
+
+  .agent-scene-backdrop-image {
+    object-position: 56% 45%;
+  }
+
+  .agent-session-content {
+    display: block;
+    min-height: calc(100svh - 7.4rem);
+    padding: 1.25rem 1rem;
+  }
+
+  .agent-chapters {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    height: auto;
+    min-height: 0;
+    margin-bottom: 1.4rem;
+    padding: 0;
+  }
+
+  .agent-chapters li {
+    gap: 0.3rem;
+    font-size: 0.65rem;
+  }
+
+  .agent-chapters li::after {
+    top: 1.1rem;
+    right: -50%;
+    bottom: auto;
+    left: 50%;
+    width: auto;
+    height: 1px;
+  }
+
+  .agent-chapters li:nth-child(2)::after {
+    display: block;
+  }
+
+  .agent-next-action {
+    display: block;
+  }
+
+  .agent-next-action h1 {
+    font-size: clamp(2rem, 10vw, 2.65rem);
+  }
+
+  .agent-control-channels {
+    justify-content: flex-start;
+    margin-top: 0.85rem;
+  }
+
+  .agent-human-gate,
+  .agent-staged-action {
+    margin-top: 0.65rem;
+  }
+
+  main[data-agent-phase="awaiting_profile_selection"] .agent-session-grid,
+  main[data-agent-phase="awaiting_scene_load"] .agent-session-grid,
+  main[data-agent-phase="awaiting_volume_acknowledgement"] .agent-session-grid {
+    width: 100%;
+    margin-top: 1rem;
+  }
+
+  .agent-profile-selection {
+    padding: 0.9rem;
+  }
+
+  .agent-profile-options {
+    gap: 0.65rem;
+  }
+
+  .agent-volume-actions {
+    display: grid;
+  }
+
+  .guided-listening-control {
+    display: grid;
+  }
+
+  .guided-listening-control button {
+    width: 100%;
+  }
+
+  .agent-human-surface .ab-playback-card {
+    grid-template-areas:
+      "heading action"
+      "conditions state";
+    grid-template-columns: minmax(0, 1fr) auto;
+    min-height: 0;
+    padding: 0.65rem 0.7rem;
+  }
+
+  .agent-human-surface .ab-card-kicker {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  .agent-human-surface .ab-card-letter {
+    width: 2.15rem;
+    height: 2.15rem;
+  }
+
+  .agent-human-surface .ab-card-heading h3 {
+    font-size: 0.96rem;
+    line-height: 1.08;
+  }
+
+  .agent-human-surface .ab-condition-list {
+    flex-wrap: wrap;
+    gap: 0.12rem 0.55rem;
+  }
+
+  .agent-human-surface .ab-condition-list div {
+    gap: 0.2rem;
+  }
+
+  .agent-human-surface .ab-condition-list dt,
+  .agent-human-surface .ab-condition-list dd {
+    font-size: 0.65rem;
+    line-height: 1.25;
+  }
+
+  .agent-human-surface .ab-card-state {
+    align-self: end;
+    padding: 0.24rem 0.42rem;
+    font-size: 0.62rem;
+  }
+
+  .agent-human-surface .ab-play-button {
+    min-width: 5.15rem;
+    min-height: 2.35rem;
+    padding: 0.35rem 0.58rem;
+  }
+
+  .agent-human-surface .guided-listening-control {
+    display: flex;
+  }
+
+  .agent-human-surface .guided-listening-control button {
+    width: auto;
+    min-height: 2.45rem;
+  }
+
+  .agent-observation-options {
+    grid-template-columns: 1fr;
+  }
+
+  .agent-scene-conditions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    justify-content: stretch;
+    margin-top: 1rem;
+  }
+
+  .agent-scene-conditions span {
+    width: auto;
+    padding: 0.25rem 0.75rem;
+    font-size: 0.72rem;
+  }
+
+  .agent-scene-conditions span:first-child {
+    grid-column: 1 / -1;
+    border-bottom: 1px solid rgb(104 215 201 / 22%);
+  }
+
+  .agent-scene-conditions span + span {
+    border-left: 1px solid rgb(104 215 201 / 34%);
+  }
+
+  .agent-human-surface .intervention-ab-grid {
+    grid-template-columns: 0.42fr 0.58fr;
+  }
+
+  .agent-human-surface .intervention-ab-card {
+    min-height: 7.5rem;
+    padding: 0.75rem;
+  }
+
+  .agent-human-surface .intervention-ab-card + .intervention-ab-card {
+    border-top: 0;
+    border-left: 1px solid rgb(88 217 201 / 24%);
+  }
+
+  .agent-human-surface .intervention-ab-context,
+  .agent-human-surface .intervention-ab-state {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  .agent-session-grid,
+  .agent-session-details,
+  .agent-session-footer {
+    margin-top: 1rem;
+  }
+
+  .agent-session-details > summary,
+  .agent-session-footer {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .agent-state-panel {
+    display: block;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-scene-backdrop-image,
+  .agent-loading-indicator {
+    animation: none;
+  }
+}
+
+/* Keep the active desktop step centered in the viewport while preserving
+   the chapter rail as a balanced visual gutter. */
+@media (min-width: 1024px) {
+  .agent-session-content {
+    grid-template-columns:
+      minmax(6rem, 8.5rem)
+      minmax(0, 66rem)
+      minmax(6rem, 8.5rem);
+    justify-content: center;
+  }
+
+  .agent-next-action {
+    grid-column: 2;
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+    width: 100%;
+    text-align: center;
+  }
+
+  .agent-next-action > div:first-child {
+    display: grid;
+    justify-items: center;
+    width: min(100%, 48rem);
+  }
+
+  .agent-next-action .agent-control-channels,
+  .agent-next-action .agent-visible-state {
+    justify-content: center;
+  }
+
+  .agent-next-action .agent-human-gate,
+  .agent-next-action .agent-staged-action {
+    text-align: left;
+  }
+
+  .agent-next-action .agent-human-gate,
+  .agent-next-action .agent-staged-action {
+    width: min(100%, 62rem);
+    margin-inline: auto;
+  }
+}
+
+@media (min-width: 1200px) {
+  .agent-next-action {
+    position: relative;
+  }
+
+  .agent-next-action .agent-control-channels {
+    position: absolute;
+    top: 0;
+    right: 0;
+    justify-content: flex-end;
+  }
+}

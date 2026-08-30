@@ -4,6 +4,7 @@ type ToolResult = Readonly<{
   ok: boolean;
   phase: string;
   revision: number;
+  allowedNextTools?: readonly string[];
   replayed?: boolean;
   data?: Record<string, unknown> | null;
   error?: Readonly<{ code: string }> | null;
@@ -12,8 +13,6 @@ type ToolResult = Readonly<{
 type RegisteredTool = Readonly<{
   execute(input: unknown): Promise<unknown>;
 }>;
-
-const STAGED_PROFILE = "high-frequency-hearing-loss";
 
 async function installMockWebMcpHost(page: Page): Promise<void> {
   await page.addInitScript(() => {
@@ -45,7 +44,7 @@ async function openWithMockWebMcp(page: Page): Promise<void> {
         (globalThis as typeof globalThis & {
           __auralisWebMcpTools?: Record<string, unknown>;
         }).__auralisWebMcpTools ?? {},
-      ).length === 5,
+      ).length === 6,
   );
 }
 
@@ -67,10 +66,27 @@ async function callTool(
   ) as Promise<ToolResult>;
 }
 
-function stageInput(requestId: string, expectedRevision: number, profileId = STAGED_PROFILE) {
+function startInput(requestId: string, expectedRevision: number) {
   return {
     requestId,
     expectedRevision,
+    action: "start",
+    goal: "family-understanding",
+  } as const;
+}
+
+function selectProfileInput(
+  requestId: string,
+  expectedRevision: number,
+  profileId:
+    | "high-frequency-hearing-loss"
+    | "flat-hearing-loss"
+    | "asymmetric-hearing-loss",
+) {
+  return {
+    requestId,
+    expectedRevision,
+    action: "select-profile",
     profileId,
     goal: "family-understanding",
   } as const;
@@ -81,6 +97,40 @@ async function expectHumanLanding(page: Page): Promise<void> {
     page.getByRole("heading", { name: "Auralis", level: 1 }),
   ).toBeVisible();
   await expect(page.locator(".agent-session-shell")).toHaveCount(0);
+}
+
+async function expectPrimaryAgentContentCentered(page: Page): Promise<void> {
+  const viewport = page.viewportSize();
+  if (!viewport || viewport.width < 1024) return;
+
+  const geometry = await page.evaluate(() => {
+    const copy = document.querySelector<HTMLElement>(
+      ".agent-next-action > div:first-child",
+    );
+    const lowerSurface = document.querySelector<HTMLElement>(
+      ".agent-session-grid",
+    );
+    const heading = document.querySelector<HTMLElement>(
+      "#agent-next-action-heading",
+    );
+    if (!copy || !lowerSurface || !heading) {
+      throw new Error("Missing shared Agent Reveal alignment surfaces.");
+    }
+    const center = (element: HTMLElement) => {
+      const rect = element.getBoundingClientRect();
+      return rect.left + rect.width / 2;
+    };
+    return {
+      copyCenter: center(copy),
+      lowerSurfaceCenter: center(lowerSurface),
+      headingTextAlign: getComputedStyle(heading).textAlign,
+    };
+  });
+
+  expect(
+    Math.abs(geometry.copyCenter - geometry.lowerSurfaceCenter),
+  ).toBeLessThanOrEqual(1);
+  expect(geometry.headingTextAlign).toBe("center");
 }
 
 async function trackModelCalls(
@@ -118,12 +168,23 @@ test("registration and failed stage requests remain inert before the sole activa
     ok: true,
     phase: "awaiting_session_stage",
     revision: 0,
+    allowedNextTools: expect.arrayContaining(["stage_demo_session"]),
+    data: {
+      capabilities: {
+        agenticActivationTool: "stage_demo_session",
+        stageDemoSessionAction: "start",
+        preferredAgentControl: "webmcp-first",
+        computerUseFallback: "human-gate-or-no-matching-tool",
+        predefinedProfileSetVersion: "auralis-synthetic-presets-v2",
+      },
+    },
   });
   await expect(page.locator(".agent-session-shell")).toHaveCount(0);
 
   const malformed = await callTool(page, "stage_demo_session", {
     requestId: "verify-malformed-stage",
     expectedRevision: 0,
+    action: "select-profile",
     profileId: "not-an-approved-profile",
     goal: "family-understanding",
   });
@@ -137,7 +198,7 @@ test("registration and failed stage requests remain inert before the sole activa
   const stale = await callTool(
     page,
     "stage_demo_session",
-    stageInput("verify-stale-stage", 1),
+    startInput("verify-stale-stage", 1),
   );
   expect(stale).toMatchObject({
     ok: false,
@@ -150,15 +211,24 @@ test("registration and failed stage requests remain inert before the sole activa
 });
 
 test("a staged WebMCP session preserves human gates and completes through browser tools plus visible human controls", async ({ page }) => {
+  test.setTimeout(120_000);
   const modelCalls = await trackModelCalls(page);
-  await page.setViewportSize({ width: 1280, height: 720 });
+  const designQaCapture = process.env.AURALIS_DESIGN_QA_CAPTURE;
+  const mobileDesignQaCapture = designQaCapture === "mobile";
+  await page.setViewportSize(
+    mobileDesignQaCapture
+      ? { width: 390, height: 844 }
+      : designQaCapture === "1"
+      ? { width: 1328, height: 969 }
+      : { width: 1280, height: 720 },
+  );
   await page.emulateMedia({ reducedMotion: "reduce" });
   await openWithMockWebMcp(page);
 
   const staged = await callTool(
     page,
     "stage_demo_session",
-    stageInput("verify-stage", 0),
+    startInput("verify-stage", 0),
   );
   expect(staged).toMatchObject({ ok: true, phase: "awaiting_consent", revision: 1 });
 
@@ -189,33 +259,122 @@ test("a staged WebMCP session preserves human gates and completes through browse
   });
 
   await page.getByRole("button", { name: "I understand and consent" }).click();
-  await expect(page.getByRole("heading", { name: "Review the staged profile" })).toBeFocused();
-  await page
-    .getByRole("button", { name: "Confirm High-frequency hearing loss" })
-    .click();
-  await expect(page.getByRole("heading", { name: "Load the family scene" })).toBeFocused();
-  await page.getByRole("button", { name: "Load family scene" }).click();
+  await expect(page.getByRole("heading", { name: "Choose a demo audiogram" })).toBeFocused();
+  await expect(page.locator(".agent-profile-card")).toHaveCount(3);
+  await expect(page.getByTestId("agent-profile-audiogram")).toHaveCount(3);
+  await expect(page.getByRole("button", { name: /^Use / })).toHaveCount(3);
+  await expectPrimaryAgentContentCentered(page);
+  await expect(page.getByRole("button", { name: /Load family scene/i })).toHaveCount(0);
   await expect(
-    page.getByRole("heading", { name: "Set a comfortable volume" }),
-  ).toBeFocused({ timeout: 60_000 });
+    page.locator(
+      '[data-profile-id="high-frequency-hearing-loss"] .audiogram-chart desc',
+    ),
+  ).toContainText("8000 Hz: 80 dB HL");
+  await expect(
+    page.locator('[data-profile-id="flat-hearing-loss"] .audiogram-chart desc'),
+  ).toContainText("250 Hz: 55 dB HL");
+  await expect(
+    page.locator(
+      '[data-profile-id="asymmetric-hearing-loss"] .audiogram-chart desc',
+    ),
+  ).toContainText("4000 Hz: 75 dB HL");
+  if (designQaCapture) {
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.screenshot({
+      path: mobileDesignQaCapture
+        ? "artifacts/design-qa/screen3-mobile-audiograms-v2.png"
+        : "artifacts/design-qa/screen3-audiograms-v2.png",
+      fullPage: true,
+    });
+  }
+
+  const profileState = await callTool(page, "get_auralis_state", {});
+  expect(profileState).toMatchObject({
+    ok: true,
+    phase: "awaiting_profile_selection",
+    revision: 2,
+    allowedNextTools: expect.arrayContaining(["stage_demo_session"]),
+    data: {
+      capabilities: {
+        agenticActivationTool: null,
+        stageDemoSessionAction: "select-profile",
+        preferredAgentControl: "webmcp-first",
+        computerUseFallback: "human-gate-or-no-matching-tool",
+        predefinedProfileSetVersion: "auralis-synthetic-presets-v2",
+      },
+      session: { stagedProfileId: null, confirmedProfileId: null },
+      availableProfiles: expect.arrayContaining([
+        expect.objectContaining({
+          profileId: "high-frequency-hearing-loss",
+          predefinedProfileSetVersion: "auralis-synthetic-presets-v2",
+        }),
+        expect.objectContaining({
+          profileId: "flat-hearing-loss",
+          predefinedProfileSetVersion: "auralis-synthetic-presets-v2",
+        }),
+        expect.objectContaining({
+          profileId: "asymmetric-hearing-loss",
+          predefinedProfileSetVersion: "auralis-synthetic-presets-v2",
+        }),
+      ]),
+    },
+  });
+  const selectedProfile = await callTool(
+    page,
+    "stage_demo_session",
+    selectProfileInput(
+      "verify-select-profile",
+      profileState.revision,
+      "high-frequency-hearing-loss",
+    ),
+  );
+  expect(selectedProfile).toMatchObject({
+    ok: true,
+    data: { operation: "profile-selected" },
+  });
+  await expect(
+    page.locator("#agent-next-action-heading"),
+  ).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByRole("dialog")).toContainText(
+    "Set a comfortable listening level",
+  );
+  await expect(page.getByRole("button", { name: /Load family scene/i })).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "My listening level is comfortable" }),
+  ).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("button", { name: "Reset session" })).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(
+    page.getByRole("checkbox", {
+      name: /Allow agent-started playback for this session/,
+    }),
+  ).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
+  await expect(page.getByRole("button", { name: "Reset session" })).toBeFocused();
+  const backgroundStop = page.locator(".agent-stop-button");
+  await backgroundStop.evaluate((element: HTMLButtonElement) => element.focus());
+  await expect(backgroundStop).not.toBeFocused();
   await page
-    .getByRole("checkbox", { name: /I’m listening at a low volume/ })
+    .getByRole("button", { name: "My listening level is comfortable" })
+    .focus();
+  await page.getByRole("checkbox", {
+    name: /Allow agent-started playback for this session/,
+  }).check();
+  await page
+    .getByRole("button", { name: "My listening level is comfortable" })
     .click();
   await expect(
-    page.getByRole("heading", { name: "Prepare the first comparison" }),
+    page.getByRole("heading", { name: "Listen to A, then B" }),
   ).toBeFocused();
 
   const ready = await callTool(page, "get_auralis_state", {});
-  const baseline = await callTool(page, "prepare_comparison", {
-    requestId: "verify-baseline",
-    expectedRevision: ready.revision,
-    kind: "baseline",
-  });
-  expect(baseline).toMatchObject({
+  expect(ready).toMatchObject({
     ok: true,
     phase: "awaiting_baseline_listening",
     data: {
-      comparison: {
+      audio: { agentPlaybackGranted: true },
+      currentComparison: {
         comparisonId: "comparison-1",
         kind: "baseline",
         settings: {
@@ -228,13 +387,56 @@ test("a staged WebMCP session preserves human gates and completes through browse
       },
     },
   });
-  await expect(page.getByRole("heading", { name: "Listen to A, then B" })).toBeFocused();
   await expect(page.locator(".agent-human-surface > .experience-screen")).toHaveCSS(
     "animation-name",
     "none",
   );
 
-  await expect(page.getByRole("radio", { name: "Bilateral support" })).toBeDisabled();
+  await expect(page.getByRole("radio", { name: "Bilateral support" })).toHaveCount(0);
+  await expect(page.locator(".agent-staged-action")).toHaveCount(0);
+  await expect(page.getByText("Scene transcript", { exact: true })).toHaveCount(0);
+  await expect(
+    page.getByText("Comfortable listening level acknowledged", { exact: true }),
+  ).toHaveCount(0);
+  await expect(page.locator(".agent-scene-backdrop-image")).toHaveAttribute(
+    "src",
+    /auralis-family-scene-agent-v1/,
+  );
+  await expect(page.locator(".listening-transport-status")).toContainText(
+    "A and B controls are ready",
+  );
+  await expectPrimaryAgentContentCentered(page);
+  const compactPlaybackGeometry = await page.locator(".ab-playback-grid").evaluate((grid) => {
+    const cards = [...grid.querySelectorAll<HTMLElement>(".ab-playback-card")];
+    return {
+      gridHeight: grid.getBoundingClientRect().height,
+      cardHeights: cards.map((card) => card.getBoundingClientRect().height),
+    };
+  });
+  if (designQaCapture) {
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.screenshot({
+      path: mobileDesignQaCapture
+        ? "artifacts/design-qa/screen4-mobile-compact.png"
+        : "artifacts/design-qa/screen4-compact.png",
+      fullPage: true,
+    });
+  }
+  expect(compactPlaybackGeometry.gridHeight).toBeLessThanOrEqual(
+    mobileDesignQaCapture ? 380 : 240,
+  );
+  expect(compactPlaybackGeometry.cardHeights).toHaveLength(2);
+  expect(Math.max(...compactPlaybackGeometry.cardHeights)).toBeLessThanOrEqual(130);
+  if (!mobileDesignQaCapture) {
+    const listeningDockMargin = await page
+      .locator(".agent-session-grid")
+      .evaluate((grid) => Number.parseFloat(getComputedStyle(grid).marginTop));
+    expect(listeningDockMargin).toBeGreaterThanOrEqual(30);
+  }
+  const horizontalOverflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  );
+  expect(horizontalOverflow).toBeLessThanOrEqual(1);
   await expect(page.getByRole("button", { name: /Play B — .*illustrative result/ })).toBeEnabled();
   await expect(page.getByRole("button", { name: "Stop immediately" })).toBeDisabled();
 
@@ -269,23 +471,43 @@ test("a staged WebMCP session preserves human gates and completes through browse
   const stop = page.getByRole("button", { name: "Stop immediately" });
   await expect(stop).toBeInViewport();
   await playB.click();
+  await expect(page.locator(".ab-playback-card-b")).toHaveAttribute(
+    "data-playback-state",
+    /preparing|playing/,
+    { timeout: 1_000 },
+  );
+  await expect(page.locator(".ab-playback-grid")).toHaveAttribute(
+    "data-transport-state",
+    /preparing|playing/,
+    { timeout: 1_000 },
+  );
   await expect(page.getByText(/^Playing B ·/)).toBeVisible({ timeout: 60_000 });
+  await expect(page.locator(".ab-playback-card-b")).toHaveAttribute(
+    "aria-current",
+    "true",
+  );
+  if (designQaCapture) {
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.screenshot({
+      path: mobileDesignQaCapture
+        ? "artifacts/design-qa/screen4-mobile-playing-b.png"
+        : "artifacts/design-qa/screen4-playing-b.png",
+      fullPage: true,
+    });
+  }
   await expect(stop).toBeEnabled();
   await expect(stop).toBeInViewport();
   await stop.click();
   await expect(stop).toBeDisabled();
 
-  // Current V1 records a started-and-stopped mode in `heardPlaybackModes`.
-  // The gate remains closed because the reference mode was not played. This
-  // assertion keeps the known naming/duration release blocker visible rather
-  // than misrepresenting the current runtime as meaningful listening proof.
+  // Stop is cancellation, never listening evidence.
   const afterImmediateStop = await callTool(page, "get_auralis_state", {});
   expect(afterImmediateStop).toMatchObject({
     ok: true,
     phase: "awaiting_baseline_listening",
     data: {
       audio: { playbackStatus: "stopped" },
-      currentComparison: { heardPlaybackModes: ["simulated"] },
+      currentComparison: { heardPlaybackModes: [] },
     },
   });
   const prematureObservation = await callTool(page, "record_user_observation", {
@@ -303,25 +525,104 @@ test("a staged WebMCP session preserves human gates and completes through browse
     error: { code: "INVALID_PHASE" },
   });
 
-  const playA = page.getByRole("button", { name: "Play A — Source reference" });
-  await playA.scrollIntoViewIfNeeded();
-  await playA.click();
-  await expect(page.getByText(/^Playing A ·/)).toBeVisible({ timeout: 60_000 });
+  const transitionRun = await callTool(page, "play_listening_comparison", {
+    requestId: "verify-transition-stop",
+    expectedRevision: afterImmediateStop.revision,
+    comparisonId: "comparison-1",
+    playback: "reference-then-simulated",
+    focus: "important-speaker",
+  });
+  expect(transitionRun).toMatchObject({
+    ok: true,
+    replayed: false,
+    phase: "awaiting_baseline_listening",
+    data: { status: "started", sequence: ["reference", "simulated"] },
+  });
+  await expect
+    .poll(
+      () => page.locator(".ab-playback-grid").getAttribute("data-transport-state"),
+      { timeout: 20_000, intervals: [20] },
+    )
+    .toBe("transition");
+  await expect(page.locator(".listening-transport-status")).toContainText(
+    "Transition A → B",
+  );
   await expect(stop).toBeEnabled();
   await stop.click();
-  await expect(page.getByRole("heading", { name: "What did you notice?" })).toBeFocused();
+  await expect(page.locator(".ab-playback-grid")).not.toHaveAttribute(
+    "data-transport-state",
+    "transition",
+  );
+  const afterTransitionStop = await callTool(page, "get_auralis_state", {});
+  expect(afterTransitionStop).toMatchObject({
+    ok: true,
+    phase: "awaiting_baseline_listening",
+    data: {
+      audio: { playbackStatus: "stopped" },
+      currentComparison: { heardPlaybackModes: ["reference"] },
+    },
+  });
+  const transitionEvidence = await callTool(page, "get_session_evidence", {});
+  expect(transitionEvidence).toMatchObject({
+    data: {
+      evidence: {
+        playbackRuns: expect.arrayContaining([
+          expect.objectContaining({
+            requestId: "verify-transition-stop",
+            status: "cancelled",
+          }),
+        ]),
+      },
+    },
+  });
+
+  const guidedBaseline = await callTool(page, "play_listening_comparison", {
+    requestId: "verify-guided-baseline",
+    expectedRevision: afterTransitionStop.revision,
+    comparisonId: "comparison-1",
+    playback: "reference-then-simulated",
+    focus: "important-speaker",
+  });
+  expect(guidedBaseline).toMatchObject({
+    ok: true,
+    replayed: false,
+    phase: "awaiting_baseline_listening",
+    data: {
+      status: "started",
+      sequence: ["reference", "simulated"],
+      clipWindow: { startSeconds: 32.3, durationSeconds: 8 },
+    },
+  });
+  await expect(page.getByRole("heading", { name: "What did you notice?" })).toBeFocused({
+    timeout: 60_000,
+  });
 
   const baselineReadyForObservation = await callTool(page, "get_auralis_state", {});
   expect(baselineReadyForObservation).toMatchObject({
     ok: true,
     phase: "awaiting_baseline_observation",
     data: {
-      currentComparison: { heardPlaybackModes: ["simulated", "reference"] },
+      currentComparison: { heardPlaybackModes: ["reference", "simulated"] },
     },
+  });
+  await page
+    .getByRole("button", { name: "I do not hear a clear difference" })
+    .click();
+  await expect(stop).toBeEnabled({ timeout: 60_000 });
+  await expect(stop).toBeDisabled({ timeout: 60_000 });
+  await expect(
+    page.getByRole("button", {
+      name: "Continue and record that I am unsure",
+    }),
+  ).toBeVisible();
+  const afterNoDifferenceReplay = await callTool(page, "get_auralis_state", {});
+  expect(afterNoDifferenceReplay).toMatchObject({
+    ok: true,
+    phase: "awaiting_baseline_observation",
   });
   const baselineObservation = await callTool(page, "record_user_observation", {
     requestId: "verify-baseline-observation",
-    expectedRevision: baselineReadyForObservation.revision,
+    expectedRevision: afterNoDifferenceReplay.revision,
     comparisonId: "comparison-1",
     focusedSpeech: "partial",
     maskingSources: ["television"],
@@ -337,6 +638,28 @@ test("a staged WebMCP session preserves human gates and completes through browse
     },
   });
   await expect(page.getByRole("heading", { name: "Choose one useful change" })).toBeFocused();
+  await expect(page.locator(".agent-staged-action")).toHaveCount(0);
+  await expect(page.getByLabel("Available adaptation options").locator("article")).toHaveCount(3);
+  await expect(page.locator(".agent-session-details")).toBeHidden();
+  await expectPrimaryAgentContentCentered(page);
+  const adaptationOptionGeometry = await page
+    .getByLabel("Available adaptation options")
+    .locator("article")
+    .evaluateAll((cards) =>
+      cards.map((card) => card.getBoundingClientRect().height),
+    );
+  expect(Math.max(...adaptationOptionGeometry)).toBeLessThanOrEqual(
+    mobileDesignQaCapture ? 180 : 150,
+  );
+  if (designQaCapture) {
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.screenshot({
+      path: mobileDesignQaCapture
+        ? "artifacts/design-qa/screen5-mobile-adaptation-choice.png"
+        : "artifacts/design-qa/screen5-adaptation-choice.png",
+      fullPage: true,
+    });
+  }
 
   const adaptation = await callTool(page, "prepare_comparison", {
     requestId: "verify-support-adaptation",
@@ -363,22 +686,46 @@ test("a staged WebMCP session preserves human gates and completes through browse
       },
     },
   });
-  await expect(page.getByRole("heading", { name: "Listen to the changed result" })).toBeFocused();
+  await expect(page.getByRole("heading", { name: "Now listen to B" })).toBeFocused();
   await expect(
     page.getByRole("list", { name: "Agent-guided session progress" }).getByRole("listitem").nth(2),
   ).toHaveAttribute("aria-current", "step");
+  await expect(page.locator(".agent-session-details")).toBeHidden();
+  await expect(page.locator(".intervention-transport-status")).toHaveCSS(
+    "position",
+    "absolute",
+  );
+  await expect(page.locator(".intervention-transport-status")).toHaveCSS(
+    "overflow",
+    "hidden",
+  );
+  await expectPrimaryAgentContentCentered(page);
+  if (designQaCapture) {
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.screenshot({
+      path: mobileDesignQaCapture
+        ? "artifacts/design-qa/screen5-mobile-adaptation-listening.png"
+        : "artifacts/design-qa/screen5-adaptation-listening.png",
+      fullPage: true,
+    });
+  }
 
-  const playAdaptation = page.getByRole("button", {
-    name: "Play B — Bilateral support current illustrative result",
+  const adaptationListening = await callTool(page, "play_listening_comparison", {
+    requestId: "verify-guided-adaptation",
+    expectedRevision: adaptation.revision,
+    comparisonId: "comparison-2",
+    playback: "simulated",
+    focus: "important-speaker",
   });
-  await playAdaptation.scrollIntoViewIfNeeded();
-  await playAdaptation.click();
-  await expect(page.getByText(/^Playing B · Bilateral support ·/)).toBeVisible({
+  expect(adaptationListening).toMatchObject({
+    ok: true,
+    replayed: false,
+    phase: "awaiting_comparison_listening",
+    data: { status: "started", sequence: ["simulated"] },
+  });
+  await expect(page.getByRole("heading", { name: "Did that change help?" })).toBeFocused({
     timeout: 60_000,
   });
-  await expect(stop).toBeEnabled();
-  await stop.click();
-  await expect(page.getByRole("heading", { name: "Did that change help?" })).toBeFocused();
 
   const adaptationReadyForObservation = await callTool(page, "get_auralis_state", {});
   expect(adaptationReadyForObservation).toMatchObject({
@@ -420,7 +767,7 @@ test("a staged WebMCP session preserves human gates and completes through browse
     phase: "ready_for_summary",
     data: {
       evidence: {
-        schemaVersion: "auralis-webmcp-evidence-v1",
+        schemaVersion: "auralis-webmcp-evidence-v3",
         completionState: "ready_for_summary",
         summaryReady: true,
         comparisons: [
@@ -431,9 +778,71 @@ test("a staged WebMCP session preserves human gates and completes through browse
           { observationId: "observation-1", comparisonId: "comparison-1" },
           { observationId: "observation-2", comparisonId: "comparison-2" },
         ],
+        playbackRuns: expect.arrayContaining([
+          expect.objectContaining({
+            comparisonId: "comparison-1",
+            playback: "reference-then-simulated",
+            focus: "important-speaker",
+            purpose: "initial-listening",
+            status: "completed",
+          }),
+          expect.objectContaining({
+            comparisonId: "comparison-2",
+            playback: "simulated",
+            focus: "important-speaker",
+            purpose: "initial-listening",
+            status: "completed",
+          }),
+        ]),
+        noDifferenceRecoveries: [
+          {
+            comparisonId: "comparison-1",
+            completedCount: 1,
+            playback: "reference-then-simulated",
+            focus: "important-speaker",
+          },
+        ],
       },
     },
   });
+  const playbackEvents = (
+    evidenceBeforeFinish.data?.evidence as {
+      events: Array<{
+        action: string;
+        requestId: string | null;
+        runId: string | null;
+      }>;
+    }
+  ).events.filter(
+    (event) =>
+      event.requestId !== null &&
+      [
+        "playback_requested",
+        "playback_started",
+        "playback_completed",
+        "playback_cancelled",
+        "playback_failed",
+      ].includes(event.action),
+  );
+  for (const requestId of [
+    "verify-guided-baseline",
+    "verify-guided-adaptation",
+  ]) {
+    const runEvents = playbackEvents.filter(
+      (event) => event.requestId === requestId,
+    );
+    expect(runEvents.map((event) => event.action)).toContain(
+      "playback_requested",
+    );
+    expect(runEvents.map((event) => event.action)).toContain(
+      "playback_started",
+    );
+    expect(runEvents.map((event) => event.action)).toContain(
+      "playback_completed",
+    );
+    expect(new Set(runEvents.map((event) => event.runId)).size).toBe(1);
+    expect(runEvents[0]?.runId).toMatch(/^playback-[0-9a-f-]{36}$/);
+  }
 
   await page.getByRole("button", { name: "Finish this session" }).click();
   await expect(
@@ -445,7 +854,7 @@ test("a staged WebMCP session preserves human gates and completes through browse
     phase: "complete",
     data: {
       evidence: {
-        schemaVersion: "auralis-webmcp-evidence-v1",
+        schemaVersion: "auralis-webmcp-evidence-v3",
         completionState: "complete",
         summaryReady: true,
         comparisons: [{ comparisonId: "comparison-1" }, { comparisonId: "comparison-2" }],
@@ -456,38 +865,48 @@ test("a staged WebMCP session preserves human gates and completes through browse
   expect(modelCalls.count()).toBe(0);
 });
 
-test("one pre-confirmation restage is permitted and a third stage remains blocked", async ({ page }) => {
+test("one post-consent agent profile selection is permitted and a second selection remains blocked", async ({ page }) => {
   const modelCalls = await trackModelCalls(page);
   await openWithMockWebMcp(page);
 
   const first = await callTool(
     page,
     "stage_demo_session",
-    stageInput("verify-restage-first", 0),
+    startInput("verify-restage-first", 0),
   );
   expect(first).toMatchObject({ ok: true, revision: 1 });
   const replay = await callTool(
     page,
     "stage_demo_session",
-    stageInput("verify-restage-first", 0),
+    startInput("verify-restage-first", 0),
   );
   expect(replay).toMatchObject({ ok: true, revision: 1, replayed: true });
+  await page.getByRole("button", { name: "I understand and consent" }).click();
+  const afterConsent = await callTool(page, "get_auralis_state", {});
   const reused = await callTool(
     page,
     "stage_demo_session",
-    stageInput("verify-restage-first", 1, "flat-hearing-loss"),
+    selectProfileInput(
+      "verify-restage-first",
+      afterConsent.revision,
+      "flat-hearing-loss",
+    ),
   );
   expect(reused).toMatchObject({
     ok: false,
-    revision: 1,
+    revision: afterConsent.revision,
     error: { code: "REQUEST_ID_REUSE" },
   });
   const second = await callTool(
     page,
     "stage_demo_session",
-    stageInput("verify-restage-second", 1, "flat-hearing-loss"),
+    selectProfileInput(
+      "verify-restage-second",
+      afterConsent.revision,
+      "flat-hearing-loss",
+    ),
   );
-  expect(second).toMatchObject({ ok: true, revision: 2 });
+  expect(second).toMatchObject({ ok: true, revision: afterConsent.revision + 1 });
   const state = await callTool(page, "get_auralis_state", {});
   expect(state).toMatchObject({
     data: { session: { stagedProfileId: "flat-hearing-loss", stageCount: 2 } },
@@ -495,14 +914,108 @@ test("one pre-confirmation restage is permitted and a third stage remains blocke
   const third = await callTool(
     page,
     "stage_demo_session",
-    stageInput("verify-restage-third", 2, "asymmetric-hearing-loss"),
+    selectProfileInput(
+      "verify-restage-third",
+      state.revision,
+      "asymmetric-hearing-loss",
+    ),
   );
   expect(third).toMatchObject({
     ok: false,
-    revision: 2,
+    revision: state.revision,
     error: { code: "INVALID_PHASE" },
   });
   expect(modelCalls.count()).toBe(0);
+});
+
+test("a direct profile click updates the same agent session and starts scene preparation", async ({ page }) => {
+  await openWithMockWebMcp(page);
+  const started = await callTool(
+    page,
+    "stage_demo_session",
+    startInput("verify-click-stage", 0),
+  );
+  expect(started.ok).toBe(true);
+  await page.getByRole("button", { name: "I understand and consent" }).click();
+  await expect(page.locator(".agent-profile-card")).toHaveCount(3);
+  const beforeClick = await callTool(page, "get_auralis_state", {});
+
+  await page
+    .getByRole("button", { name: "Use Flat hearing loss" })
+    .click();
+  await expect(page.getByRole("dialog")).toBeVisible({ timeout: 60_000 });
+
+  const state = await callTool(page, "get_auralis_state", {});
+  expect(state).toMatchObject({
+    ok: true,
+    phase: "awaiting_volume_acknowledgement",
+    data: {
+      session: {
+        stagedProfileId: "flat-hearing-loss",
+        confirmedProfileId: "flat-hearing-loss",
+        lastEvent: { actor: "system", action: "scene_loaded" },
+      },
+      audio: { sourceStatus: "ready" },
+    },
+  });
+  const evidence = await callTool(page, "get_session_evidence", {});
+  expect(evidence).toMatchObject({
+    data: {
+      evidence: {
+        events: expect.arrayContaining([
+          expect.objectContaining({ actor: "human", action: "profile_confirmed" }),
+        ]),
+      },
+    },
+  });
+  const staleAgentSelection = await callTool(
+    page,
+    "stage_demo_session",
+    selectProfileInput(
+      "verify-stale-after-click",
+      beforeClick.revision,
+      "asymmetric-hearing-loss",
+    ),
+  );
+  expect(staleAgentSelection).toMatchObject({
+    ok: false,
+    error: { code: "STALE_REVISION" },
+  });
+});
+
+test("automatic scene preparation fails closed and exposes only a bounded retry", async ({ page }) => {
+  await page.route("**/media/family-dinner/manifest.json", async (route) => {
+    await route.abort();
+  });
+  await openWithMockWebMcp(page);
+  const started = await callTool(
+    page,
+    "stage_demo_session",
+    startInput("verify-load-failure-stage", 0),
+  );
+  expect(started.ok).toBe(true);
+  await page.getByRole("button", { name: "I understand and consent" }).click();
+  await page
+    .getByRole("button", { name: "Use Asymmetric hearing loss" })
+    .click();
+
+  await expect(
+    page.getByRole("heading", {
+      name: "The family scene could not be prepared",
+    }),
+  ).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByRole("button", { name: /Load family scene/i })).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Retry scene preparation" }),
+  ).toBeVisible();
+
+  await page.unroute("**/media/family-dinner/manifest.json");
+  await page.getByRole("button", { name: "Retry scene preparation" }).click();
+  await expect(page.getByRole("dialog")).toBeVisible({ timeout: 60_000 });
+  await page.getByRole("button", { name: "Reset session" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Auralis", level: 1 }),
+  ).toBeFocused();
 });
 
 test("reset restores the landing and stale calls cannot resurrect the prior session", async ({ page }) => {
@@ -511,7 +1024,7 @@ test("reset restores the landing and stale calls cannot resurrect the prior sess
   const staged = await callTool(
     page,
     "stage_demo_session",
-    stageInput("verify-reset-stage", 0),
+    startInput("verify-reset-stage", 0),
   );
   expect(staged).toMatchObject({ ok: true, revision: 1 });
   await page
@@ -529,7 +1042,7 @@ test("reset restores the landing and stale calls cannot resurrect the prior sess
   const stale = await callTool(
     page,
     "stage_demo_session",
-    stageInput("verify-reset-stale", 0),
+    startInput("verify-reset-stale", 0),
   );
   expect(stale).toMatchObject({ ok: false, error: { code: "STALE_REVISION" } });
   await expectHumanLanding(page);
@@ -548,7 +1061,7 @@ test("a progressed human journey blocks staging and keeps its human surface inta
   const blocked = await callTool(
     page,
     "stage_demo_session",
-    stageInput("verify-human-progress", progressed.revision),
+    startInput("verify-human-progress", progressed.revision),
   );
   expect(blocked).toMatchObject({
     ok: false,

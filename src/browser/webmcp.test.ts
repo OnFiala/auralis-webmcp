@@ -11,6 +11,8 @@ import {
   getSessionEvidenceDataSchema,
   prepareComparisonDataSchema,
   prepareComparisonInputSchema,
+  playListeningComparisonDataSchema,
+  playListeningComparisonInputSchema,
   recordUserObservationDataSchema,
   recordUserObservationInputSchema,
   stageDemoSessionDataSchema,
@@ -18,8 +20,18 @@ import {
   type AuralisToolName,
   type AuralisToolResult,
   type GetAuralisStateData,
+  type PlayListeningComparisonData,
 } from "../contracts/webmcp";
-import { createExperienceController } from "../core/experience";
+import {
+  createExperienceController,
+  experienceReducer,
+} from "../core/experience";
+import { FAMILY_DINNER_SOURCE_ID } from "../core/source";
+import {
+  confirmWebMcpConsent,
+  confirmWebMcpListeningReadiness,
+  stageDemoSession,
+} from "../core/webmcp";
 import {
   createAuralisWebMcpTools,
   registerAuralisWebMcpTools,
@@ -28,6 +40,8 @@ import {
 } from "./webmcp";
 
 const source = readFileSync(new URL("./webmcp.ts", import.meta.url), "utf8");
+const EXPECTED_WEBMCP_FIRST_INSTRUCTION =
+  "When a matching tool appears in allowedNextTools, use that WebMCP tool before Computer Use. Computer Use is fallback-only for an explicit visible human gate after approval, or when no matching WebMCP tool is allowed; never click to imitate an equivalent tool.";
 
 function topLevelView() {
   const view: { top: unknown; self: unknown } = { top: null, self: null };
@@ -72,6 +86,42 @@ function asResult<T = unknown>(value: unknown): AuralisToolResult<T> {
 async function flushCleanup() {
   await Promise.resolve();
   await Promise.resolve();
+}
+
+function playbackReadyController() {
+  const controller = createExperienceController();
+  expect(
+    stageDemoSession(controller, {
+      requestId: "ready-stage",
+      expectedRevision: 0,
+      action: "start",
+      goal: "family-understanding",
+    }).ok,
+  ).toBe(true);
+  expect(confirmWebMcpConsent(controller).changed).toBe(true);
+  expect(
+    stageDemoSession(controller, {
+      requestId: "ready-profile",
+      expectedRevision: controller.getSnapshot().webMcp.revision,
+      action: "select-profile",
+      goal: "family-understanding",
+      profileId: "flat-hearing-loss",
+    }).ok,
+  ).toBe(true);
+  controller.commit((state) =>
+    experienceReducer(state, { type: "source-load-started" }),
+  );
+  controller.commit((state) =>
+    experienceReducer(state, {
+      type: "source-ready",
+      sourceIdentity: FAMILY_DINNER_SOURCE_ID,
+      sampleRate: 24_000,
+      frameCount: 1_536_000,
+      durationSeconds: 64,
+    }),
+  );
+  expect(confirmWebMcpListeningReadiness(controller, true).changed).toBe(true);
+  return controller;
 }
 
 describe("Auralis WebMCP browser adapter", () => {
@@ -126,7 +176,7 @@ describe("Auralis WebMCP browser adapter", () => {
     binding.dispose();
   });
 
-  it("registers the exact five frozen names, metadata, schemas and annotations", () => {
+  it("registers the exact six v1.3 names, metadata, schemas and annotations", () => {
     const tools = createAuralisWebMcpTools(createExperienceController());
     const expected = {
       get_auralis_state: [
@@ -137,7 +187,7 @@ describe("Auralis WebMCP browser adapter", () => {
       ],
       stage_demo_session: [
         "Stage family demo",
-        "Start or restage the bounded agent-guided family demo with one approved synthetic illustrative hearing profile. The first successful call activates the visible Agent Reveal. This tool does not supply consent, confirm the profile, load audio, acknowledge physical volume, or start playback.",
+        "Start the bounded agent-guided family demo without preselecting a profile. After visible human consent, call it again with select-profile to choose exactly one of the three approved synthetic profiles. A person may choose the same options on the page. Scene loading then starts automatically; comfortable-volume acknowledgement and the separate agent-playback grant remain visible human controls.",
         false,
         stageDemoSessionInputSchema,
       ],
@@ -147,9 +197,15 @@ describe("Auralis WebMCP browser adapter", () => {
         false,
         prepareComparisonInputSchema,
       ],
+      play_listening_comparison: [
+        "Play a listening comparison",
+        "After the person explicitly grants agent playback on the visible page, start A, B, or the bounded A-then-B eight-second comparison. The page owns timed on-screen guidance and the person can stop immediately. Natural media end is required before playback counts as heard.",
+        false,
+        playListeningComparisonInputSchema,
+      ],
       record_user_observation: [
         "Record listening observation",
-        "Record a bounded report that the human explicitly provided after hearing the current comparison. This tool does not infer hearing ability or provide a diagnosis.",
+        "Translate only the person's stated everyday words into the bounded observation fields; never ask for enum names, infer hearing ability, or provide a diagnosis. If they report no clear difference or remain unsure, replay A then B with important-speaker focus before recording the observation.",
         false,
         recordUserObservationInputSchema,
       ],
@@ -162,11 +218,13 @@ describe("Auralis WebMCP browser adapter", () => {
     } as const;
 
     expect(tools.map((tool) => tool.name)).toEqual(AURALIS_TOOL_NAMES);
-    expect(tools).toHaveLength(5);
+    expect(tools).toHaveLength(6);
     for (const tool of tools) {
       const [title, description, readOnly, inputSchema] = expected[tool.name];
       expect(tool.title).toBe(title);
-      expect(tool.description).toBe(description);
+      expect(tool.description).toBe(
+        `${description} ${EXPECTED_WEBMCP_FIRST_INSTRUCTION}`,
+      );
       expect(tool.annotations).toEqual({
         readOnlyHint: readOnly,
         untrustedContentHint: false,
@@ -196,7 +254,7 @@ describe("Auralis WebMCP browser adapter", () => {
     });
     await flushCleanup();
     expect(await strictModeRemount.status).toBe("registered");
-    expect(harness.registerTool).toHaveBeenCalledTimes(5);
+    expect(harness.registerTool).toHaveBeenCalledTimes(6);
     duplicate.dispose();
     strictModeRemount.dispose();
   });
@@ -208,7 +266,7 @@ describe("Auralis WebMCP browser adapter", () => {
       document: harness.host,
     });
     expect(await binding.status).toBe("registered");
-    expect(harness.signals).toHaveLength(5);
+    expect(harness.signals).toHaveLength(6);
     expect(new Set(harness.signals).size).toBe(1);
     expect(harness.signals[0]?.aborted).toBe(false);
 
@@ -231,7 +289,7 @@ describe("Auralis WebMCP browser adapter", () => {
         {
           requestId: "stage-aborted",
           expectedRevision: 0,
-          profileId: "high-frequency-hearing-loss",
+          action: "start",
           goal: "family-understanding",
         },
         { signal: abortController.signal },
@@ -269,16 +327,14 @@ describe("Auralis WebMCP browser adapter", () => {
       await stage.execute({
         requestId: "stage-1",
         expectedRevision: 0,
-        profileId: "flat-hearing-loss",
+        action: "start",
         goal: "family-understanding",
       }),
     );
 
     expect(result.ok).toBe(true);
     expect(result.revision).toBe(1);
-    expect(controller.getSnapshot().webMcp.session?.stagedProfileId).toBe(
-      "flat-hearing-loss",
-    );
+    expect(controller.getSnapshot().webMcp.session?.stagedProfileId).toBeNull();
     const projected = asResult<GetAuralisStateData>(
       await byName(
         createAuralisWebMcpTools(controller),
@@ -288,6 +344,26 @@ describe("Auralis WebMCP browser adapter", () => {
     expect(projected.ok && projected.data.session.presentation).toBe(
       "agent-guided",
     );
+
+    expect(confirmWebMcpConsent(controller).ok).toBe(true);
+    const selected = asResult(
+      await stage.execute({
+        requestId: "select-profile-1",
+        expectedRevision: controller.getSnapshot().webMcp.revision,
+        action: "select-profile",
+        profileId: "flat-hearing-loss",
+        goal: "family-understanding",
+      }),
+    );
+    expect(selected).toMatchObject({
+      ok: true,
+      phase: "awaiting_scene_load",
+      data: { operation: "profile-selected" },
+    });
+    expect(controller.getSnapshot().webMcp.session).toMatchObject({
+      stagedProfileId: "flat-hearing-loss",
+      confirmedProfileId: "flat-hearing-loss",
+    });
   });
 
   it("binds every handler to core commands and contains no selector or click path", () => {
@@ -295,6 +371,7 @@ describe("Auralis WebMCP browser adapter", () => {
       "getAuralisState",
       "stageDemoSession",
       "prepareComparison",
+      "playListeningComparison",
       "recordUserObservation",
       "getSessionEvidence",
     ]) {
@@ -329,7 +406,7 @@ describe("Auralis WebMCP browser adapter", () => {
       await byName(tools, "stage_demo_session").execute({
         requestId: "stage-throws",
         expectedRevision: 0,
-        profileId: "asymmetric-hearing-loss",
+        action: "start",
         goal: "family-understanding",
       }),
     );
@@ -347,6 +424,7 @@ describe("Auralis WebMCP browser adapter", () => {
       get_auralis_state: getAuralisStateDataSchema,
       stage_demo_session: stageDemoSessionDataSchema,
       prepare_comparison: prepareComparisonDataSchema,
+      play_listening_comparison: playListeningComparisonDataSchema,
       record_user_observation: recordUserObservationDataSchema,
       get_session_evidence: getSessionEvidenceDataSchema,
     };
@@ -362,6 +440,115 @@ describe("Auralis WebMCP browser adapter", () => {
         auralisToolResultSchema(dataSchemas[tool.name]).safeParse(result).success,
       ).toBe(true);
     }
+  });
+
+  it("fails a reserved run closed when the page playback port is unavailable", async () => {
+    const controller = createExperienceController();
+    const harness = hostHarness();
+    const binding = registerAuralisWebMcpTools({
+      controller,
+      document: harness.host,
+      playbackPort: null,
+    });
+    expect(await binding.status).toBe("registered");
+    const stageTool = byName(harness.tools, "stage_demo_session");
+    expect(
+      asResult(
+        await stageTool.execute({
+          requestId: "port-stage",
+          expectedRevision: 0,
+          action: "start",
+          goal: "family-understanding",
+        }),
+      ).ok,
+    ).toBe(true);
+    expect(confirmWebMcpConsent(controller).changed).toBe(true);
+    expect(
+      asResult(
+        await stageTool.execute({
+          requestId: "port-profile",
+          expectedRevision: controller.getSnapshot().webMcp.revision,
+          action: "select-profile",
+          goal: "family-understanding",
+          profileId: "flat-hearing-loss",
+        }),
+      ).ok,
+    ).toBe(true);
+    controller.commit((state) =>
+      experienceReducer(state, { type: "source-load-started" }),
+    );
+    controller.commit((state) =>
+      experienceReducer(state, {
+        type: "source-ready",
+        sourceIdentity: FAMILY_DINNER_SOURCE_ID,
+        sampleRate: 24_000,
+        frameCount: 1_536_000,
+        durationSeconds: 64,
+      }),
+    );
+    expect(confirmWebMcpListeningReadiness(controller, true).changed).toBe(true);
+
+    const result = asResult<PlayListeningComparisonData>(
+      await byName(harness.tools, "play_listening_comparison").execute({
+        requestId: "port-playback",
+        expectedRevision: controller.getSnapshot().webMcp.revision,
+        comparisonId: "comparison-1",
+        playback: "reference",
+        focus: "important-speaker",
+      }),
+    );
+    expect(result).toMatchObject({
+      ok: true,
+      replayed: false,
+      data: { status: "failed" },
+    });
+    expect(controller.getSnapshot().webMcp.session?.events.at(-1)).toMatchObject({
+      action: "playback_failed",
+      requestId: "port-playback",
+      runId: result.ok ? result.data.runId : null,
+    });
+    binding.dispose();
+  });
+
+  it("keeps the first portless executor result distinct from an idempotent replay", async () => {
+    const controller = playbackReadyController();
+    const expectedRevision = controller.getSnapshot().webMcp.revision;
+    const result = asResult<PlayListeningComparisonData>(
+      await byName(
+        createAuralisWebMcpTools(controller),
+        "play_listening_comparison",
+      ).execute({
+        requestId: "default-portless-playback",
+        expectedRevision,
+        comparisonId: "comparison-1",
+        playback: "reference",
+        focus: "important-speaker",
+      }),
+    );
+
+    expect(result).toMatchObject({
+      ok: true,
+      replayed: false,
+      data: { status: "failed" },
+    });
+    if (!result.ok) throw new Error("Expected a failed-closed run projection.");
+    const repeated = asResult<PlayListeningComparisonData>(
+      await byName(
+        createAuralisWebMcpTools(controller),
+        "play_listening_comparison",
+      ).execute({
+        requestId: "default-portless-playback",
+        expectedRevision,
+        comparisonId: "comparison-1",
+        playback: "reference",
+        focus: "important-speaker",
+      }),
+    );
+    expect(repeated).toMatchObject({
+      ok: true,
+      replayed: true,
+      data: { runId: result.data.runId, status: "failed" },
+    });
   });
 
   it("has no browser-audio import or playback invocation", () => {
@@ -386,7 +573,7 @@ describe("Auralis WebMCP browser adapter", () => {
       await stage.execute({
         requestId: "stage-publish",
         expectedRevision: 0,
-        profileId: "high-frequency-hearing-loss",
+        action: "start",
         goal: "family-understanding",
       }),
     );

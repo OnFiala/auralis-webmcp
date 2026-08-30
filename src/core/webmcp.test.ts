@@ -7,16 +7,24 @@ import {
   experienceReducer,
   type ExperienceController,
 } from "./experience";
+import { ACTIVE_PREDEFINED_PROFILE_SET_VERSION } from "./profile";
 import {
+  cancelWebMcpPlaybackRun,
+  completeWebMcpNoDifferenceRecovery,
   confirmWebMcpConsent,
-  confirmWebMcpProfile,
+  confirmWebMcpListeningReadiness,
   deriveAuralisWebMcpPhase,
+  deriveValidAdaptationOptions,
   finishWebMcpSession,
   getAuralisState,
   getSessionEvidence,
   prepareComparison,
+  prepareWebMcpAdaptation,
+  playListeningComparison,
+  recordWebMcpHumanObservation,
   recordUserObservation,
   resetWebMcpExperience,
+  selectWebMcpProfile,
   stageDemoSession,
 } from "./webmcp";
 
@@ -37,10 +45,6 @@ function expectError(
 function stage(
   controller: ExperienceController,
   requestId = "stage-1",
-  profileId:
-    | "high-frequency-hearing-loss"
-    | "flat-hearing-loss"
-    | "asymmetric-hearing-loss" = "high-frequency-hearing-loss",
   createSessionId = () => SESSION_ID,
 ) {
   return stageDemoSession(
@@ -48,10 +52,30 @@ function stage(
     {
       requestId,
       expectedRevision: controller.getSnapshot().webMcp.revision,
-      profileId,
+      action: "start",
       goal: "family-understanding",
     },
     { createSessionId },
+  );
+}
+
+function selectProfileWithAgent(
+  controller: ExperienceController,
+  profileId:
+    | "high-frequency-hearing-loss"
+    | "flat-hearing-loss"
+    | "asymmetric-hearing-loss" = "high-frequency-hearing-loss",
+  requestId = "select-profile-1",
+) {
+  return stageDemoSession(
+    controller,
+    {
+      requestId,
+      expectedRevision: controller.getSnapshot().webMcp.revision,
+      action: "select-profile",
+      goal: "family-understanding",
+      profileId,
+    },
   );
 }
 
@@ -68,7 +92,7 @@ function readyController(): ExperienceController {
   const controller = createExperienceController();
   expect(stage(controller).ok).toBe(true);
   expect(confirmWebMcpConsent(controller)).toMatchObject({ ok: true, changed: true });
-  expect(confirmWebMcpProfile(controller, SOURCE_IDENTITY)).toMatchObject({
+  expect(selectWebMcpProfile(controller, "high-frequency-hearing-loss")).toMatchObject({
     ok: true,
     changed: true,
   });
@@ -94,6 +118,67 @@ function readyController(): ExperienceController {
     "ready_for_baseline",
   );
   return controller;
+}
+
+function atomicListeningController(
+  agentPlaybackGranted = true,
+): ExperienceController {
+  const controller = createExperienceController();
+  expect(stage(controller).ok).toBe(true);
+  expect(confirmWebMcpConsent(controller)).toMatchObject({ ok: true, changed: true });
+  expect(selectWebMcpProfile(controller, "high-frequency-hearing-loss")).toMatchObject({
+    ok: true,
+    changed: true,
+  });
+  commitHuman(controller, (state) =>
+    experienceReducer(state, { type: "source-load-started" }),
+  );
+  commitHuman(controller, (state) =>
+    experienceReducer(state, {
+      type: "source-ready",
+      sourceIdentity: SOURCE_IDENTITY,
+      sampleRate: 24_000,
+      frameCount: 1_536_000,
+      durationSeconds: 64,
+    }),
+  );
+  expect(
+    confirmWebMcpListeningReadiness(controller, agentPlaybackGranted),
+  ).toMatchObject({ ok: true, changed: true });
+  return controller;
+}
+
+function completeRunLeg(
+  controller: ExperienceController,
+  mode: "reference" | "simulated",
+  runId: string,
+) {
+  commitHuman(controller, (state) =>
+    experienceReducer(state, { type: "render-started", mode }),
+  );
+  const rendering = controller.getSnapshot();
+  const resultIdentity = comparisonResultIdentity(rendering, mode)!;
+  commitHuman(controller, (state) =>
+    experienceReducer(state, {
+      type: "playback-started",
+      mode,
+      supportMode: mode === "reference" ? null : state.supportMode,
+      interventionState: state.interventionState,
+      speakerPositionState: state.speakerPositionState,
+      sourceIdentity: SOURCE_IDENTITY,
+      resultIdentity,
+      peakDbFs: -9,
+      actor: "agent",
+      runId,
+    }),
+  );
+  commitHuman(controller, (state) =>
+    experienceReducer(state, {
+      type: "playback-ended",
+      resultIdentity,
+      runId,
+    }),
+  );
 }
 
 function prepareBaseline(controller: ExperienceController, requestId = "baseline-1") {
@@ -199,6 +284,17 @@ describe("Auralis WebMCP deterministic domain contract", () => {
       revision: 0,
       phase: "awaiting_session_stage",
       sessionId: null,
+      allowedNextTools: expect.arrayContaining(["stage_demo_session"]),
+      data: {
+        capabilities: {
+          agenticActivationTool: "stage_demo_session",
+          stageDemoSessionAction: "start",
+          preferredAgentControl: "webmcp-first",
+          computerUseFallback: "human-gate-or-no-matching-tool",
+          predefinedProfileSetVersion:
+            ACTIVE_PREDEFINED_PROFILE_SET_VERSION,
+        },
+      },
     });
     expect(evidence).toMatchObject({ ok: true, data: { evidence: null } });
     expect(controller.getSnapshot()).toBe(initial);
@@ -221,14 +317,23 @@ describe("Auralis WebMCP deterministic domain contract", () => {
       phase: "awaiting_consent",
       sessionId: SESSION_ID,
       data: {
+        operation: "started",
+        stagedProfile: null,
         agenticPresentation: "active",
         pendingConsent: true,
-        pendingHumanConfirmation: true,
+        pendingProfileSelection: true,
       },
     });
     expect(getAuralisState(controller)).toMatchObject({
       ok: true,
-      data: { session: { presentation: "agent-guided", stageCount: 1 } },
+      allowedNextTools: ["get_auralis_state", "get_session_evidence"],
+      data: {
+        capabilities: {
+          agenticActivationTool: null,
+          stageDemoSessionAction: null,
+        },
+        session: { presentation: "agent-guided", stageCount: 1 },
+      },
     });
   });
 
@@ -250,14 +355,19 @@ describe("Auralis WebMCP deterministic domain contract", () => {
     expect(controller.getSnapshot().manualDraft.left["4000"]).toBe("55");
   });
 
-  it("allows exactly one profile restage before confirmation", () => {
+  it("allows exactly one agent profile selection after human consent", () => {
     const controller = createExperienceController();
     expect(stage(controller).ok).toBe(true);
-    const sameProfile = stage(controller, "stage-same-profile");
-    expectError(sameProfile, "INVALID_INPUT");
+    const beforeConsent = selectProfileWithAgent(controller);
+    expectError(beforeConsent, "INVALID_PHASE");
     expect(controller.getSnapshot().webMcp.session?.stageCount).toBe(1);
-    expect(stage(controller, "stage-2", "flat-hearing-loss").ok).toBe(true);
-    const third = stage(controller, "stage-3", "asymmetric-hearing-loss");
+    expect(confirmWebMcpConsent(controller).ok).toBe(true);
+    expect(selectProfileWithAgent(controller, "flat-hearing-loss").ok).toBe(true);
+    const third = selectProfileWithAgent(
+      controller,
+      "asymmetric-hearing-loss",
+      "select-profile-2",
+    );
 
     expectError(third, "INVALID_PHASE");
     expect(controller.getSnapshot().webMcp.session).toMatchObject({
@@ -271,7 +381,7 @@ describe("Auralis WebMCP deterministic domain contract", () => {
     const input = {
       requestId: "stage-replay",
       expectedRevision: 0,
-      profileId: "high-frequency-hearing-loss",
+      action: "start",
       goal: "family-understanding",
     } as const;
     const first = stageDemoSession(controller, input, {
@@ -294,6 +404,7 @@ describe("Auralis WebMCP deterministic domain contract", () => {
     const result = stageDemoSession(controller, {
       requestId: "same-id",
       expectedRevision: 1,
+      action: "select-profile",
       profileId: "flat-hearing-loss",
       goal: "family-understanding",
     });
@@ -307,7 +418,7 @@ describe("Auralis WebMCP deterministic domain contract", () => {
     const result = stageDemoSession(controller, {
       requestId: "stale-stage",
       expectedRevision: 1,
-      profileId: "high-frequency-hearing-loss",
+      action: "start",
       goal: "family-understanding",
     });
 
@@ -324,7 +435,7 @@ describe("Auralis WebMCP deterministic domain contract", () => {
       {
         requestId: "aborted-stage",
         expectedRevision: 0,
-        profileId: "high-frequency-hearing-loss",
+        action: "start",
         goal: "family-understanding",
       },
       { signal: abort.signal },
@@ -341,7 +452,7 @@ describe("Auralis WebMCP deterministic domain contract", () => {
       {
         requestId: "invalid-output-stage",
         expectedRevision: 0,
-        profileId: "high-frequency-hearing-loss",
+        action: "start",
         goal: "family-understanding",
       },
       { createSessionId: () => "invalid-session-identity" },
@@ -353,14 +464,14 @@ describe("Auralis WebMCP deterministic domain contract", () => {
     expect(controller.getSnapshot().webMcp.requestRecords).toHaveLength(0);
   });
 
-  it("keeps consent and profile confirmation as explicit human events", () => {
+  it("keeps consent human-only and records a direct human profile choice", () => {
     const controller = createExperienceController();
     expect(stage(controller).ok).toBe(true);
     expect(confirmWebMcpConsent(controller)).toMatchObject({ ok: true, changed: true });
     expect(deriveAuralisWebMcpPhase(controller.getSnapshot())).toBe(
-      "awaiting_profile_confirmation",
+      "awaiting_profile_selection",
     );
-    expect(confirmWebMcpProfile(controller, SOURCE_IDENTITY)).toMatchObject({
+    expect(selectWebMcpProfile(controller, "asymmetric-hearing-loss")).toMatchObject({
       ok: true,
       changed: true,
     });
@@ -374,7 +485,7 @@ describe("Auralis WebMCP deterministic domain contract", () => {
     ]);
   });
 
-  it("projects the seven human authority gates at their exact phases", () => {
+  it("projects only the three v1.3 human authority gates at their exact phases", () => {
     const controller = createExperienceController();
     expect(stage(controller).ok).toBe(true);
     expect(getAuralisState(controller)).toMatchObject({
@@ -386,11 +497,36 @@ describe("Auralis WebMCP deterministic domain contract", () => {
     });
     expect(confirmWebMcpConsent(controller).ok).toBe(true);
     expect(getAuralisState(controller)).toMatchObject({
-      humanGate: { kind: "confirm_profile" },
+      phase: "awaiting_profile_selection",
+      humanGate: null,
+      allowedNextTools: expect.arrayContaining(["stage_demo_session"]),
+      data: {
+        capabilities: {
+          agenticActivationTool: null,
+          stageDemoSessionAction: "select-profile",
+          preferredAgentControl: "webmcp-first",
+          computerUseFallback: "human-gate-or-no-matching-tool",
+          predefinedProfileSetVersion:
+            ACTIVE_PREDEFINED_PROFILE_SET_VERSION,
+        },
+        availableProfiles: expect.arrayContaining([
+          expect.objectContaining({
+            profileId: "high-frequency-hearing-loss",
+            predefinedProfileSetVersion:
+              ACTIVE_PREDEFINED_PROFILE_SET_VERSION,
+          }),
+        ]),
+      },
     });
-    expect(confirmWebMcpProfile(controller, SOURCE_IDENTITY).ok).toBe(true);
+    expect(
+      selectWebMcpProfile(
+        controller,
+        "high-frequency-hearing-loss",
+      ).ok,
+    ).toBe(true);
     expect(getAuralisState(controller)).toMatchObject({
-      humanGate: { kind: "load_scene" },
+      phase: "awaiting_scene_load",
+      humanGate: null,
     });
     commitHuman(controller, (state) =>
       experienceReducer(state, { type: "source-load-started" }),
@@ -405,7 +541,7 @@ describe("Auralis WebMCP deterministic domain contract", () => {
       }),
     );
     expect(getAuralisState(controller)).toMatchObject({
-      humanGate: { kind: "acknowledge_low_volume" },
+      humanGate: { kind: "acknowledge_comfortable_volume" },
     });
     commitHuman(controller, (state) =>
       experienceReducer(state, {
@@ -415,7 +551,7 @@ describe("Auralis WebMCP deterministic domain contract", () => {
     );
     expect(prepareBaseline(controller, "gates-baseline").ok).toBe(true);
     expect(getAuralisState(controller)).toMatchObject({
-      humanGate: { kind: "listen_baseline" },
+      humanGate: null,
     });
     listenBaseline(controller);
     expect(observe(controller, "gates-observe-1", "comparison-1").ok).toBe(true);
@@ -428,7 +564,7 @@ describe("Auralis WebMCP deterministic domain contract", () => {
       ).ok,
     ).toBe(true);
     expect(getAuralisState(controller)).toMatchObject({
-      humanGate: { kind: "listen_comparison" },
+      humanGate: null,
     });
     play(controller, "simulated");
     expect(
@@ -439,6 +575,426 @@ describe("Auralis WebMCP deterministic domain contract", () => {
     ).toBe(true);
     expect(getAuralisState(controller)).toMatchObject({
       humanGate: { kind: "finish_session" },
+    });
+  });
+
+  it("atomically acknowledges comfortable volume and prepares one fixed baseline", () => {
+    const controller = atomicListeningController(true);
+    const snapshot = controller.getSnapshot();
+
+    expect(deriveAuralisWebMcpPhase(snapshot)).toBe(
+      "awaiting_baseline_listening",
+    );
+    expect(snapshot.lowVolumeAcknowledged).toBe(true);
+    expect(snapshot.agentPlaybackGranted).toBe(true);
+    expect(snapshot.webMcp.session?.comparisons).toHaveLength(1);
+    expect(snapshot.webMcp.session?.comparisons[0]).toMatchObject({
+      kind: "baseline",
+      settings: {
+        supportMode: "none",
+        televisionState: "tv-on",
+        speakerPosition: "original-position",
+      },
+    });
+    expect(snapshot.webMcp.session?.events.slice(-2)).toMatchObject([
+      { action: "volume_acknowledged", actor: "human" },
+      { action: "comparison_prepared", actor: "system" },
+    ]);
+    const repeated = confirmWebMcpListeningReadiness(controller, true);
+    expect(repeated).toMatchObject({ ok: true, changed: false });
+    expect(controller.getSnapshot()).toBe(snapshot);
+  });
+
+  it("requires the explicit agent-playback grant and exact current comparison", () => {
+    const controller = atomicListeningController(false);
+    const revision = controller.getSnapshot().webMcp.revision;
+    expectError(
+      playListeningComparison(controller, {
+        requestId: "play-without-grant",
+        expectedRevision: revision,
+        comparisonId: "comparison-1",
+        playback: "reference-then-simulated",
+        focus: "important-speaker",
+      }),
+      "HUMAN_ACTION_REQUIRED",
+    );
+    expect(controller.getSnapshot().webMcp.session?.playbackRuns).toHaveLength(0);
+
+    const granted = atomicListeningController(true);
+    expectError(
+      playListeningComparison(granted, {
+        requestId: "wrong-comparison",
+        expectedRevision: granted.getSnapshot().webMcp.revision,
+        comparisonId: "comparison-2",
+        playback: "simulated",
+        focus: "overall-scene",
+      }),
+      "COMPARISON_MISMATCH",
+    );
+  });
+
+  it("reserves one idempotent run, rejects concurrent audio, and counts only natural end", () => {
+    const controller = atomicListeningController(true);
+    const expectedRevision = controller.getSnapshot().webMcp.revision;
+    const input = {
+      requestId: "guided-stop",
+      expectedRevision,
+      comparisonId: "comparison-1" as const,
+      playback: "reference-then-simulated" as const,
+      focus: "important-speaker" as const,
+    };
+    const reserved = playListeningComparison(controller, input, {
+      createRunId: () => "playback-11111111-1111-4111-8111-111111111111",
+    });
+    expect(reserved).toMatchObject({
+      ok: true,
+      replayed: false,
+      data: {
+        status: "starting",
+        sequence: ["reference", "simulated"],
+        clipWindow: { startSeconds: 32.3, durationSeconds: 8 },
+      },
+    });
+    if (!reserved.ok) throw new Error("Expected playback reservation.");
+
+    expectError(
+      playListeningComparison(controller, {
+        ...input,
+        requestId: "concurrent-audio",
+        expectedRevision: controller.getSnapshot().webMcp.revision,
+      }),
+      "AUDIO_BUSY",
+    );
+
+    const runId = reserved.data.runId;
+    commitHuman(controller, (state) =>
+      experienceReducer(state, { type: "render-started", mode: "reference" }),
+    );
+    const resultIdentity = comparisonResultIdentity(
+      controller.getSnapshot(),
+      "reference",
+    )!;
+    commitHuman(controller, (state) =>
+      experienceReducer(state, {
+        type: "playback-started",
+        mode: "reference",
+        supportMode: null,
+        interventionState: state.interventionState,
+        speakerPositionState: state.speakerPositionState,
+        sourceIdentity: SOURCE_IDENTITY,
+        resultIdentity,
+        peakDbFs: -9,
+        actor: "agent",
+        runId,
+      }),
+    );
+    commitHuman(controller, (state) =>
+      experienceReducer(state, { type: "playback-stopped", runId }),
+    );
+
+    expect(controller.getSnapshot().webMcp.session?.comparisons[0]?.heardPlaybackModes).toEqual([]);
+    expect(controller.getSnapshot().webMcp.session?.playbackRuns[0]).toMatchObject({
+      status: "cancelled",
+      completedModes: [],
+    });
+    expect(controller.getSnapshot().webMcp.session?.events.at(-1)).toMatchObject({
+      action: "playback_cancelled",
+      actor: "human",
+    });
+    expect(playListeningComparison(controller, input)).toMatchObject({
+      ok: true,
+      replayed: true,
+      data: { status: "cancelled", runId },
+    });
+  });
+
+  it("cancels an agent run during rendering and allows a fresh request", () => {
+    const controller = atomicListeningController(true);
+    const reserved = playListeningComparison(
+      controller,
+      {
+        requestId: "cancel-during-render",
+        expectedRevision: controller.getSnapshot().webMcp.revision,
+        comparisonId: "comparison-1",
+        playback: "reference-then-simulated",
+        focus: "important-speaker",
+      },
+      { createRunId: () => "playback-33333333-3333-4333-8333-333333333333" },
+    );
+    if (!reserved.ok) throw new Error("Expected playback reservation.");
+    commitHuman(controller, (state) =>
+      experienceReducer(state, { type: "render-started", mode: "reference" }),
+    );
+
+    expect(cancelWebMcpPlaybackRun(controller, reserved.data.runId)).toMatchObject({
+      ok: true,
+      changed: true,
+    });
+    const cancelled = controller.getSnapshot();
+    expect(cancelled.renders.reference.status).toBe("idle");
+    expect(cancelled.webMcp.session?.pendingPlayback).toBeNull();
+    expect(cancelled.webMcp.session?.playbackRuns[0]).toMatchObject({
+      status: "cancelled",
+      completedModes: [],
+    });
+    expect(cancelled.webMcp.session?.events.at(-1)).toMatchObject({
+      action: "playback_cancelled",
+      actor: "human",
+      requestId: "cancel-during-render",
+      runId: reserved.data.runId,
+    });
+
+    expect(
+      playListeningComparison(controller, {
+        requestId: "after-render-cancel",
+        expectedRevision: cancelled.webMcp.revision,
+        comparisonId: "comparison-1",
+        playback: "reference",
+        focus: "important-speaker",
+      }),
+    ).toMatchObject({ ok: true, replayed: false, data: { status: "starting" } });
+  });
+
+  it("ignores a stale terminal callback whose runId does not match the active run", () => {
+    const controller = atomicListeningController(true);
+    const first = playListeningComparison(
+      controller,
+      {
+        requestId: "stale-first",
+        expectedRevision: controller.getSnapshot().webMcp.revision,
+        comparisonId: "comparison-1",
+        playback: "reference",
+        focus: "important-speaker",
+      },
+      { createRunId: () => "playback-44444444-4444-4444-8444-444444444444" },
+    );
+    if (!first.ok) throw new Error("Expected first playback reservation.");
+    commitHuman(controller, (state) =>
+      experienceReducer(state, { type: "render-started", mode: "reference" }),
+    );
+    const firstIdentity = comparisonResultIdentity(
+      controller.getSnapshot(),
+      "reference",
+    )!;
+    commitHuman(controller, (state) =>
+      experienceReducer(state, {
+        type: "playback-started",
+        mode: "reference",
+        supportMode: null,
+        interventionState: state.interventionState,
+        speakerPositionState: state.speakerPositionState,
+        sourceIdentity: SOURCE_IDENTITY,
+        resultIdentity: firstIdentity,
+        peakDbFs: -9,
+        actor: "agent",
+        runId: first.data.runId,
+      }),
+    );
+    expect(cancelWebMcpPlaybackRun(controller, first.data.runId).changed).toBe(true);
+
+    const second = playListeningComparison(
+      controller,
+      {
+        requestId: "stale-second",
+        expectedRevision: controller.getSnapshot().webMcp.revision,
+        comparisonId: "comparison-1",
+        playback: "reference",
+        focus: "important-speaker",
+      },
+      { createRunId: () => "playback-55555555-5555-4555-8555-555555555555" },
+    );
+    if (!second.ok) throw new Error("Expected second playback reservation.");
+    commitHuman(controller, (state) =>
+      experienceReducer(state, { type: "render-started", mode: "reference" }),
+    );
+    const secondIdentity = comparisonResultIdentity(
+      controller.getSnapshot(),
+      "reference",
+    )!;
+    const beforeStaleStart = controller.getSnapshot();
+    const staleStart = controller.commit((state) =>
+      experienceReducer(state, {
+        type: "playback-started",
+        mode: "reference",
+        supportMode: null,
+        interventionState: state.interventionState,
+        speakerPositionState: state.speakerPositionState,
+        sourceIdentity: SOURCE_IDENTITY,
+        resultIdentity: secondIdentity,
+        peakDbFs: -9,
+        actor: "agent",
+        runId: first.data.runId,
+      }),
+    );
+    expect(staleStart).toMatchObject({ ok: true, changed: false });
+    expect(controller.getSnapshot()).toBe(beforeStaleStart);
+    commitHuman(controller, (state) =>
+      experienceReducer(state, {
+        type: "playback-started",
+        mode: "reference",
+        supportMode: null,
+        interventionState: state.interventionState,
+        speakerPositionState: state.speakerPositionState,
+        sourceIdentity: SOURCE_IDENTITY,
+        resultIdentity: secondIdentity,
+        peakDbFs: -9,
+        actor: "agent",
+        runId: second.data.runId,
+      }),
+    );
+    const beforeStale = controller.getSnapshot();
+    const stale = controller.commit((state) =>
+      experienceReducer(state, {
+        type: "playback-ended",
+        resultIdentity: firstIdentity,
+        runId: first.data.runId,
+      }),
+    );
+    expect(stale).toMatchObject({ ok: true, changed: false });
+    expect(controller.getSnapshot()).toBe(beforeStale);
+    expect(controller.getSnapshot().playback).toMatchObject({
+      status: "playing",
+      runId: second.data.runId,
+    });
+    expect(controller.getSnapshot().webMcp.session?.pendingPlayback).toMatchObject({
+      runId: second.data.runId,
+    });
+  });
+
+  it("completes the guided A-to-B run and replays its final status without restarting", () => {
+    const controller = atomicListeningController(true);
+    const input = {
+      requestId: "guided-complete",
+      expectedRevision: controller.getSnapshot().webMcp.revision,
+      comparisonId: "comparison-1" as const,
+      playback: "reference-then-simulated" as const,
+      focus: "important-speaker" as const,
+    };
+    const reserved = playListeningComparison(controller, input, {
+      createRunId: () => "playback-22222222-2222-4222-8222-222222222222",
+    });
+    if (!reserved.ok) throw new Error("Expected playback reservation.");
+    completeRunLeg(controller, "reference", reserved.data.runId);
+    completeRunLeg(controller, "simulated", reserved.data.runId);
+
+    expect(controller.getSnapshot().webMcp.session?.playbackRuns[0]).toMatchObject({
+      status: "completed",
+      completedModes: ["reference", "simulated"],
+    });
+    expect(controller.getSnapshot().webMcp.session?.events.at(-1)).toMatchObject({
+      action: "playback_completed",
+      actor: "system",
+    });
+    expect(deriveAuralisWebMcpPhase(controller.getSnapshot())).toBe(
+      "awaiting_baseline_observation",
+    );
+    expect(playListeningComparison(controller, input)).toMatchObject({
+      ok: true,
+      replayed: true,
+      data: { status: "completed" },
+    });
+  });
+
+  it("requires one evidenced focused replay before recording no clear difference", () => {
+    const controller = atomicListeningController(true);
+    const first = playListeningComparison(
+      controller,
+      {
+        requestId: "initial-ab",
+        expectedRevision: controller.getSnapshot().webMcp.revision,
+        comparisonId: "comparison-1",
+        playback: "reference-then-simulated",
+        focus: "important-speaker",
+      },
+      { createRunId: () => "playback-66666666-6666-4666-8666-666666666666" },
+    );
+    if (!first.ok) throw new Error("Expected initial A-to-B reservation.");
+    completeRunLeg(controller, "reference", first.data.runId);
+    completeRunLeg(controller, "simulated", first.data.runId);
+
+    const uncertainInput = {
+      requestId: "no-difference-before-replay",
+      expectedRevision: controller.getSnapshot().webMcp.revision,
+      comparisonId: "comparison-1" as const,
+      focusedSpeech: "unsure" as const,
+      maskingSources: ["unsure"] as const,
+      relativeToPrevious: "not_compared" as const,
+      nextAction: "continue" as const,
+    };
+    expectError(recordUserObservation(controller, uncertainInput), "REPLAY_REQUIRED");
+
+    const replay = playListeningComparison(
+      controller,
+      {
+        requestId: "focused-replay",
+        expectedRevision: controller.getSnapshot().webMcp.revision,
+        comparisonId: "comparison-1",
+        playback: "reference-then-simulated",
+        focus: "important-speaker",
+      },
+      { createRunId: () => "playback-77777777-7777-4777-8777-777777777777" },
+    );
+    if (!replay.ok) throw new Error("Expected focused replay reservation.");
+    expect(
+      controller.getSnapshot().webMcp.session?.playbackRuns.at(-1),
+    ).toMatchObject({ purpose: "no-difference-recovery" });
+    completeRunLeg(controller, "reference", replay.data.runId);
+    completeRunLeg(controller, "simulated", replay.data.runId);
+    expect(
+      controller.getSnapshot().webMcp.session?.noDifferenceRecoveries,
+    ).toContainEqual({ comparisonId: "comparison-1", completedCount: 1 });
+    expect(getSessionEvidence(controller)).toMatchObject({
+      ok: true,
+      data: {
+        evidence: {
+          playbackRuns: [
+            { purpose: "initial-listening", focus: "important-speaker" },
+            {
+              purpose: "no-difference-recovery",
+              focus: "important-speaker",
+              status: "completed",
+            },
+          ],
+          noDifferenceRecoveries: [
+            {
+              comparisonId: "comparison-1",
+              completedCount: 1,
+              playback: "reference-then-simulated",
+              focus: "important-speaker",
+            },
+          ],
+        },
+      },
+    });
+
+    expect(
+      recordUserObservation(controller, {
+        ...uncertainInput,
+        requestId: "no-difference-after-replay",
+        expectedRevision: controller.getSnapshot().webMcp.revision,
+      }),
+    ).toMatchObject({ ok: true, phase: "ready_for_adaptation" });
+  });
+
+  it("uses the same no-difference recovery gate for direct human observations", () => {
+    const controller = atomicListeningController(false);
+    listenBaseline(controller);
+    const input = {
+      focusedSpeech: "unsure" as const,
+      maskingSources: ["unsure" as const],
+      relativeToPrevious: "not_compared" as const,
+      nextAction: "continue" as const,
+    };
+    expect(recordWebMcpHumanObservation(controller, input)).toMatchObject({
+      ok: true,
+      changed: false,
+    });
+    expect(
+      completeWebMcpNoDifferenceRecovery(controller, "comparison-1"),
+    ).toMatchObject({ ok: true, changed: true });
+    expect(recordWebMcpHumanObservation(controller, input)).toMatchObject({
+      ok: true,
+      changed: true,
     });
   });
 
@@ -573,6 +1129,38 @@ describe("Auralis WebMCP deterministic domain contract", () => {
     });
   });
 
+  it("projects the same adaptation source of truth to agent and direct page actions", () => {
+    const agentController = baselineObservedController();
+    const directController = baselineObservedController();
+    const options = deriveValidAdaptationOptions(agentController.getSnapshot());
+    expect(options.map((option) => [option.variable, option.value])).toEqual([
+      ["support_mode", "bilateral"],
+      ["television_state", "tv-off"],
+      ["speaker_position", "closer-in-front"],
+    ]);
+
+    const option = options[1]!;
+    const agent = prepareAdaptation(
+      agentController,
+      "agent-parity",
+      option.variable,
+      option.value,
+    );
+    expect(agent.ok).toBe(true);
+    expect(
+      prepareWebMcpAdaptation(
+        directController,
+        option.variable,
+        option.value,
+      ),
+    ).toMatchObject({ ok: true, changed: true });
+    expect(
+      agentController.getSnapshot().webMcp.session?.comparisons.at(-1),
+    ).toEqual(
+      directController.getSnapshot().webMcp.session?.comparisons.at(-1),
+    );
+  });
+
   it("requires adaptation observations to compare against the previous result", () => {
     const controller = baselineObservedController();
     expect(
@@ -687,16 +1275,11 @@ describe("Auralis WebMCP deterministic domain contract", () => {
     const delayed = stageDemoSession(controller, {
       requestId: "generation-id",
       expectedRevision: 0,
-      profileId: "high-frequency-hearing-loss",
+      action: "start",
       goal: "family-understanding",
     });
     expectError(delayed, "STALE_REVISION");
-    const fresh = stage(
-      controller,
-      "generation-id",
-      "flat-hearing-loss",
-      () => NEXT_SESSION_ID,
-    );
+    const fresh = stage(controller, "generation-id", () => NEXT_SESSION_ID);
     expect(fresh).toMatchObject({
       ok: true,
       replayed: false,
@@ -738,12 +1321,7 @@ describe("Auralis WebMCP deterministic domain contract", () => {
     });
     expect(controller.getSnapshot().manualDraft.left["4000"]).toBe("25");
     expect(
-      stage(
-        controller,
-        "stage-after-reset",
-        "high-frequency-hearing-loss",
-        () => NEXT_SESSION_ID,
-      ).ok,
+      stage(controller, "stage-after-reset", () => NEXT_SESSION_ID).ok,
     ).toBe(true);
   });
 

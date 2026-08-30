@@ -4,6 +4,7 @@ import {
   AURALIS_WEBMCP_EVIDENCE_SCHEMA_VERSION,
   AURALIS_WEBMCP_LIMITATION,
   AURALIS_WEBMCP_MAX_ADAPTATIONS,
+  AURALIS_WEBMCP_MAX_PLAYBACK_RUNS_PER_COMPARISON,
   AURALIS_WEBMCP_MAX_REVISION,
   COMPARISON_IDS,
   MASKING_SOURCES,
@@ -13,11 +14,14 @@ import {
   getSessionEvidenceDataSchema,
   prepareComparisonDataSchema,
   prepareComparisonInputSchema,
+  playListeningComparisonDataSchema,
+  playListeningComparisonInputSchema,
   recordUserObservationDataSchema,
   recordUserObservationInputSchema,
   stageDemoSessionDataSchema,
   stageDemoSessionInputSchema,
   type AuralisSettings,
+  type AdaptationOptionProjection,
   type AuralisToolErrorCode,
   type AuralisToolName,
   type AuralisToolResult,
@@ -26,9 +30,13 @@ import {
   type GetAuralisStateData,
   type GetSessionEvidenceData,
   type HumanGateProjection,
+  type ListeningFocus,
+  type ListeningPlayback,
   type ObservationProjection,
   type PrepareComparisonData,
   type PrepareComparisonInput,
+  type PlayListeningComparisonData,
+  type PlayListeningComparisonInput,
   type ProfileId,
   type ProfileProjection,
   type RecordUserObservationData,
@@ -47,9 +55,14 @@ import {
   type ExperienceController,
   type ExperienceState,
   type WebMcpRequestRecord,
+  type WebMcpPlaybackRun,
   type WebMcpSessionState,
 } from "./experience";
-import { PREDEFINED_HEARING_PROFILES } from "./profile";
+import {
+  ACTIVE_PREDEFINED_PROFILE_SET_VERSION,
+  PREDEFINED_HEARING_PROFILES,
+} from "./profile";
+import { FAMILY_DINNER_SOURCE_ID } from "./source";
 
 const CONTROL_CHANNELS = Object.freeze([
   "direct",
@@ -85,6 +98,7 @@ export const AURALIS_PROFILE_PROJECTIONS: readonly ProfileProjection[] =
     PREDEFINED_HEARING_PROFILES.map((profile) =>
       Object.freeze({
         profileId: profile.id,
+        predefinedProfileSetVersion: profile.profileSetVersion,
         displayName: profile.displayName,
         classification: profile.classification,
         everydayDescription: PROFILE_COPY[profile.id].everydayDescription,
@@ -156,6 +170,18 @@ const ERROR_DETAILS: Readonly<
     retryable: false,
     recovery: "Ask the human to listen with the visible playback controls.",
   }),
+  REPLAY_REQUIRED: Object.freeze({
+    message: "A focused replay is required before an unsure or no-difference observation can be finalized.",
+    retryable: true,
+    recovery:
+      "Replay A then B with important-speaker focus, explain what to listen for, then ask again using everyday words.",
+  }),
+  PLAYBACK_LIMIT_REACHED: Object.freeze({
+    message: "The bounded agent playback limit for this comparison was reached.",
+    retryable: false,
+    recovery:
+      "Use the visible direct controls if another replay is needed, or record that the person remains unsure.",
+  }),
   SESSION_LIMIT_REACHED: Object.freeze({
     message: "The two-adaptation session limit has been reached.",
     retryable: false,
@@ -171,6 +197,7 @@ const ERROR_DETAILS: Readonly<
 type ExecuteOptions = Readonly<{
   signal?: AbortSignal;
   createSessionId?: () => string;
+  createRunId?: () => string;
 }>;
 
 type MutationDecision<T> =
@@ -202,6 +229,89 @@ function adaptationsUsed(state: ExperienceState): 0 | 1 | 2 {
   return count === 0 ? 0 : count === 1 ? 1 : 2;
 }
 
+export function deriveValidAdaptationOptions(
+  state: ExperienceState,
+): readonly AdaptationOptionProjection[] {
+  if (
+    deriveAuralisWebMcpPhase(state) !== "ready_for_adaptation" ||
+    adaptationsUsed(state) >= AURALIS_WEBMCP_MAX_ADAPTATIONS
+  ) {
+    return Object.freeze([]);
+  }
+
+  const options: AdaptationOptionProjection[] = [];
+  if (state.supportMode !== "bilateral") {
+    options.push(
+      Object.freeze({
+        variable: "support_mode" as const,
+        value: "bilateral" as const,
+        label: "Add bilateral illustrative support",
+        explanation:
+          "Apply the same bounded illustrative support to both ears in B.",
+        listenFor:
+          "Listen for whether the important speaker's consonants are easier to separate from the other voices.",
+      }),
+    );
+  }
+  if (state.interventionState !== "tv-off") {
+    options.push(
+      Object.freeze({
+        variable: "television_state" as const,
+        value: "tv-off" as const,
+        label: "Turn the television off",
+        explanation:
+          "Remove only the television contribution while the people and timing stay unchanged.",
+        listenFor:
+          "Listen for whether the important speaker is easier to follow without the television competing underneath.",
+      }),
+    );
+  }
+  if (state.speakerPositionState !== "closer-in-front") {
+    options.push(
+      Object.freeze({
+        variable: "speaker_position" as const,
+        value: "closer-in-front" as const,
+        label: "Move the speaker closer and in front",
+        explanation:
+          "Change only the important speaker's bounded illustrative position in B.",
+        listenFor:
+          "Listen for whether the important speaker stands apart more clearly from the surrounding conversation.",
+      }),
+    );
+  }
+
+  return Object.freeze(options);
+}
+
+const LISTENING_GUIDANCE = Object.freeze({
+  playbackTool: "play_listening_comparison" as const,
+  focusOptions: Object.freeze([
+    "important-speaker",
+    "overall-scene",
+  ] as const),
+  askForObservation:
+    "After playback, ask the person what they noticed in their own everyday words.",
+  translateEverydayLanguage:
+    "Translate only the person's stated meaning into the bounded observation fields. Never ask them to name internal enum values and never infer a diagnosis.",
+  noDifferenceRecovery:
+    "If the person reports no clear difference, do not finalize an observation yet. Replay A then B with important-speaker focus, explain what to listen for, and ask again.",
+});
+
+function availableListeningPlaybacks(
+  phase: AuralisWebMcpPhase,
+): readonly ListeningPlayback[] {
+  return phase === "awaiting_baseline_listening" ||
+    phase === "awaiting_baseline_observation" ||
+    phase === "awaiting_comparison_listening" ||
+    phase === "awaiting_comparison_observation"
+    ? Object.freeze([
+        "reference",
+        "simulated",
+        "reference-then-simulated",
+      ] as const)
+    : Object.freeze([]);
+}
+
 function requiredPlaybackComplete(comparison: ComparisonProjection): boolean {
   return comparison.requiredPlaybackModes.every((mode) =>
     comparison.heardPlaybackModes.includes(mode),
@@ -216,7 +326,7 @@ export function deriveAuralisWebMcpPhase(
   if (session.completionState === "complete") return "complete";
   if (session.completionState === "ready_for_summary") return "ready_for_summary";
   if (!session.consentConfirmed) return "awaiting_consent";
-  if (!session.confirmedProfileId) return "awaiting_profile_confirmation";
+  if (!session.confirmedProfileId) return "awaiting_profile_selection";
   if (state.source.status !== "ready") return "awaiting_scene_load";
   if (!state.lowVolumeAcknowledged) return "awaiting_volume_acknowledgement";
 
@@ -240,31 +350,15 @@ function humanGateForPhase(
   const instructions: Partial<Record<AuralisWebMcpPhase, readonly [HumanGateProjection["kind"], string]>> = {
     awaiting_consent: [
       "confirm_consent",
-      "Explain the illustrative purpose and limitation, then wait for explicit human consent through the visible control.",
-    ],
-    awaiting_profile_confirmation: [
-      "confirm_profile",
-      "Ask the human to confirm the visibly staged synthetic profile.",
-    ],
-    awaiting_scene_load: [
-      "load_scene",
-      "Load the validated family scene only through the visible control after human direction.",
+      "Explain the illustrative purpose and limitation, then wait for explicit human consent. Do not use Computer Use preemptively; the person may use the visible control directly or explicitly direct the agent by text or voice.",
     ],
     awaiting_volume_acknowledgement: [
-      "acknowledge_low_volume",
-      "Wait until the human states that physical listening volume is comfortable, then use the visible acknowledgement.",
-    ],
-    awaiting_baseline_listening: [
-      "listen_baseline",
-      "Ask the human to play both reference A and illustrative B through the visible controls.",
-    ],
-    awaiting_comparison_listening: [
-      "listen_comparison",
-      "Ask the human to play illustrative B through the visible controls; reference A remains optional.",
+      "acknowledge_comfortable_volume",
+      "Wait until the human states that physical listening volume is comfortable. Do not use Computer Use preemptively; the person may use the visible acknowledgement directly or explicitly direct the agent by text or voice.",
     ],
     ready_for_summary: [
       "finish_session",
-      "Present the recorded evidence and finish only after explicit human direction through the visible control.",
+      "Present the recorded evidence and finish only after explicit human direction. Do not use Computer Use preemptively; the person may use the visible control directly or explicitly direct the agent by text or voice.",
     ],
   };
   const instruction = instructions[phase];
@@ -278,6 +372,22 @@ function humanGateForPhase(
     : null;
 }
 
+function stageDemoSessionActionForState(
+  state: ExperienceState,
+): "start" | "select-profile" | null {
+  const phase = deriveAuralisWebMcpPhase(state);
+  if (phase === "awaiting_session_stage" && isPristineForAgentStage(state)) {
+    return "start";
+  }
+  if (
+    phase === "awaiting_profile_selection" &&
+    state.webMcp.session?.stageCount === 1
+  ) {
+    return "select-profile";
+  }
+  return null;
+}
+
 function allowedNextToolsForState(
   state: ExperienceState,
 ): readonly AuralisToolName[] {
@@ -286,15 +396,20 @@ function allowedNextToolsForState(
     "get_auralis_state",
     "get_session_evidence",
   ];
-  if (
-    (phase === "awaiting_session_stage" && isPristineForAgentStage(state)) ||
-    ((phase === "awaiting_consent" || phase === "awaiting_profile_confirmation") &&
-      state.webMcp.session?.stageCount === 1)
-  ) {
+  if (stageDemoSessionActionForState(state) !== null) {
     always.push("stage_demo_session");
   } else if (phase === "ready_for_baseline" || phase === "ready_for_adaptation") {
     always.push("prepare_comparison");
-  } else if (
+  }
+  if (
+    phase === "awaiting_baseline_listening" ||
+    phase === "awaiting_baseline_observation" ||
+    phase === "awaiting_comparison_listening" ||
+    phase === "awaiting_comparison_observation"
+  ) {
+    always.push("play_listening_comparison");
+  }
+  if (
     phase === "awaiting_baseline_observation" ||
     phase === "awaiting_comparison_observation"
   ) {
@@ -411,6 +526,10 @@ function sessionId(): string {
   return `session-${globalThis.crypto.randomUUID().toLowerCase()}`;
 }
 
+function playbackRunId(): string {
+  return `playback-${globalThis.crypto.randomUUID().toLowerCase()}`;
+}
+
 function audioBusy(state: ExperienceState): boolean {
   return (
     state.source.status === "loading" ||
@@ -446,6 +565,22 @@ function existingRequestDecision<T>(
   if (existing.tool !== tool || existing.canonicalInput !== canonical) {
     return Object.freeze({ kind: "error", code: "REQUEST_ID_REUSE" });
   }
+  if (tool === "play_listening_comparison") {
+    const run = state.webMcp.session?.playbackRuns.find(
+      (candidate) => candidate.requestId === requestId,
+    );
+    const original = existing.data as PlayListeningComparisonData;
+    if (!run || original.runId !== run.runId) {
+      return Object.freeze({ kind: "error", code: "INTERNAL_ERROR" });
+    }
+    return Object.freeze({
+      kind: "replay",
+      data: Object.freeze({
+        ...original,
+        status: run.status,
+      }) as T,
+    });
+  }
   return Object.freeze({ kind: "replay", data: existing.data as T });
 }
 
@@ -455,6 +590,7 @@ function agentEvent(
   action: SessionEvidenceEvent["action"],
   requestId: string,
   comparisonId: ComparisonProjection["comparisonId"] | null = null,
+  runId: SessionEvidenceEvent["runId"] = null,
 ): SessionEvidenceEvent {
   return Object.freeze({
     sequence: (session?.events.length ?? 0) + 1,
@@ -463,6 +599,7 @@ function agentEvent(
     action,
     requestId,
     comparisonId,
+    runId,
   });
 }
 
@@ -470,16 +607,19 @@ function humanEvent(
   state: ExperienceState,
   action: SessionEvidenceEvent["action"],
   comparisonId: ComparisonProjection["comparisonId"] | null = null,
+  actor: SessionEvidenceEvent["actor"] = "human",
+  runId: SessionEvidenceEvent["runId"] = null,
 ): SessionEvidenceEvent | null {
   const session = state.webMcp.session;
   return session
     ? Object.freeze({
         sequence: session.events.length + 1,
         revision: state.webMcp.revision + 1,
-        actor: "human" as const,
+        actor,
         action,
         requestId: null,
         comparisonId,
+        runId,
       })
     : null;
 }
@@ -550,13 +690,29 @@ function executeMutation<I extends { requestId: string; expectedRevision: number
 function getStateData(state: ExperienceState): GetAuralisStateData {
   const session = state.webMcp.session;
   const sourceStatus = state.source.status;
+  const phase = deriveAuralisWebMcpPhase(state);
+  const stageDemoSessionAction = stageDemoSessionActionForState(state);
+  const activeRun =
+    session?.playbackRuns.find(
+      (
+        run,
+      ): run is WebMcpPlaybackRun & { status: "starting" | "started" } =>
+        run.status === "starting" || run.status === "started",
+    ) ?? null;
   return Object.freeze({
     capabilities: Object.freeze({
       maxAdaptiveComparisons: 2 as const,
       profileMode: "synthetic-predefined-only" as const,
       agenticEntry: "agent-origin-only" as const,
-      agenticActivationTool: "stage_demo_session" as const,
-      audioControl: "human-authority" as const,
+      agenticActivationTool:
+        stageDemoSessionAction === "start"
+          ? ("stage_demo_session" as const)
+          : null,
+      stageDemoSessionAction,
+      preferredAgentControl: "webmcp-first" as const,
+      computerUseFallback: "human-gate-or-no-matching-tool" as const,
+      predefinedProfileSetVersion: ACTIVE_PREDEFINED_PROFILE_SET_VERSION,
+      audioControl: "agent-start-or-direct-human-stop" as const,
       controlChannels: CONTROL_CHANNELS,
     }),
     availableProfiles: AURALIS_PROFILE_PROJECTIONS,
@@ -567,12 +723,31 @@ function getStateData(state: ExperienceState): GetAuralisStateData {
       adaptationsUsed: adaptationsUsed(state),
       presentation: session ? ("agent-guided" as const) : ("human-landing" as const),
       stageCount: session?.stageCount ?? (0 as const),
+      lastEvent: session?.events.at(-1) ?? null,
     }),
     currentComparison: currentComparison(state),
+    availableAdaptations: deriveValidAdaptationOptions(state),
+    listeningGuidance: Object.freeze({
+      ...LISTENING_GUIDANCE,
+      availablePlaybacks: availableListeningPlaybacks(phase),
+    }),
     audio: Object.freeze({
       sourceStatus,
-      lowVolumeAcknowledged: state.lowVolumeAcknowledged,
+      comfortableVolumeAcknowledged: state.lowVolumeAcknowledged,
+      agentPlaybackGranted: state.agentPlaybackGranted,
       playbackStatus: state.playback.status,
+      activeRun: activeRun
+        ? Object.freeze({
+            runId: activeRun.runId,
+            requestId: activeRun.requestId,
+            comparisonId: activeRun.comparisonId,
+            playback: activeRun.playback,
+            focus: activeRun.focus,
+            sequence: activeRun.sequence,
+            completedModes: activeRun.completedModes,
+            status: activeRun.status,
+          })
+        : null,
     }),
     summaryReady: session ? session.completionState !== "active" : false,
     limitation: AURALIS_WEBMCP_LIMITATION,
@@ -592,6 +767,30 @@ function getEvidenceData(state: ExperienceState): GetSessionEvidenceData {
       : null,
     comparisons: session.comparisons,
     observations: session.observations,
+    playbackRuns: Object.freeze(
+      session.playbackRuns.map((run) =>
+        Object.freeze({
+          runId: run.runId,
+          requestId: run.requestId,
+          comparisonId: run.comparisonId,
+          playback: run.playback,
+          focus: run.focus,
+          purpose: run.purpose,
+          completedModes: run.completedModes,
+          status: run.status,
+        }),
+      ),
+    ),
+    noDifferenceRecoveries: Object.freeze(
+      session.noDifferenceRecoveries.map((recovery) =>
+        Object.freeze({
+          comparisonId: recovery.comparisonId,
+          completedCount: recovery.completedCount,
+          playback: "reference-then-simulated" as const,
+          focus: "important-speaker" as const,
+        }),
+      ),
+    ),
     events: session.events,
     summaryReady: session.completionState !== "active",
     completionState: session.completionState,
@@ -686,28 +885,31 @@ export function stageDemoSession(
     (state) => {
       const phase = deriveAuralisWebMcpPhase(state);
       const currentSession = state.webMcp.session;
-      const firstStage = phase === "awaiting_session_stage";
-      const restage =
-        (phase === "awaiting_consent" || phase === "awaiting_profile_confirmation") &&
+      const firstStage =
+        input.action === "start" && phase === "awaiting_session_stage";
+      const profileSelection =
+        input.action === "select-profile" &&
+        phase === "awaiting_profile_selection" &&
         currentSession?.stageCount === 1 &&
         currentSession.confirmedProfileId === null;
-      if (!firstStage && !restage) {
+      if (!firstStage && !profileSelection) {
         return Object.freeze({ kind: "error", code: "INVALID_PHASE" });
       }
       if (firstStage && !isPristineForAgentStage(state)) {
         return Object.freeze({ kind: "error", code: "INVALID_PHASE" });
       }
-      if (restage && currentSession?.stagedProfileId === input.profileId) {
-        return Object.freeze({ kind: "error", code: "INVALID_INPUT" });
-      }
       if (audioBusy(state)) {
         return Object.freeze({ kind: "error", code: "AUDIO_BUSY" });
       }
       const data: StageDemoSessionData = Object.freeze({
-        stagedProfile: profileProjection(input.profileId),
+        operation: firstStage ? ("started" as const) : ("profile-selected" as const),
+        stagedProfile:
+          input.action === "select-profile"
+            ? profileProjection(input.profileId)
+            : null,
         agenticPresentation: "active" as const,
-        pendingConsent: !(currentSession?.consentConfirmed ?? false),
-        pendingHumanConfirmation: true as const,
+        pendingConsent: firstStage,
+        pendingProfileSelection: firstStage,
       });
       const record: WebMcpRequestRecord = Object.freeze({
         requestId: input.requestId,
@@ -715,18 +917,32 @@ export function stageDemoSession(
         canonicalInput: canonical,
         data,
       });
-      const next = experienceReducer(state, {
-        type: "webmcp-session-staged",
-        sessionId: currentSession?.sessionId ?? (options.createSessionId ?? sessionId)(),
-        profileId: input.profileId,
-        requestRecord: record,
-        event: agentEvent(
-          currentSession,
-          state.webMcp.revision + 1,
-          "session_staged",
-          input.requestId,
-        ),
-      });
+      const next = firstStage
+        ? experienceReducer(state, {
+            type: "webmcp-session-staged",
+            sessionId: (options.createSessionId ?? sessionId)(),
+            requestRecord: record,
+            event: agentEvent(
+              null,
+              state.webMcp.revision + 1,
+              "session_staged",
+              input.requestId,
+            ),
+          })
+        : input.action === "select-profile"
+          ? experienceReducer(state, {
+            type: "webmcp-agent-profile-selected",
+            profileId: input.profileId,
+            sourceIdentity: FAMILY_DINNER_SOURCE_ID,
+            requestRecord: record,
+            event: agentEvent(
+              currentSession,
+              state.webMcp.revision + 1,
+              "profile_confirmed",
+              input.requestId,
+            ),
+          })
+          : state;
       return !committedToolState(state, next, input.requestId)
         ? Object.freeze({ kind: "error", code: "INTERNAL_ERROR" })
         : Object.freeze({ kind: "success", next, data });
@@ -797,6 +1013,126 @@ function createComparisonProjection(
   });
 }
 
+export function confirmWebMcpListeningReadiness(
+  controller: ExperienceController,
+  agentPlaybackGranted: boolean,
+): ExperienceCommitResult {
+  return controller.commit((state) => {
+    if (
+      deriveAuralisWebMcpPhase(state) !== "awaiting_volume_acknowledgement" ||
+      audioBusy(state) ||
+      state.webMcp.revision >= AURALIS_WEBMCP_MAX_REVISION
+    ) {
+      return state;
+    }
+    const session = state.webMcp.session;
+    const settings = settingsForComparison(state, {
+      requestId: "system-baseline-preview",
+      expectedRevision: state.webMcp.revision,
+      kind: "baseline",
+    });
+    const comparison = settings
+      ? createComparisonProjection(
+          state,
+          {
+            requestId: "system-baseline-preview",
+            expectedRevision: state.webMcp.revision,
+            kind: "baseline",
+          },
+          settings,
+        )
+      : null;
+    const volumeEvent = humanEvent(state, "volume_acknowledged");
+    if (!session || !comparison || !volumeEvent) return state;
+    const comparisonEvent: SessionEvidenceEvent = Object.freeze({
+      sequence: volumeEvent.sequence + 1,
+      revision: volumeEvent.revision,
+      actor: "system" as const,
+      action: "comparison_prepared" as const,
+      requestId: null,
+      comparisonId: comparison.comparisonId,
+      runId: null,
+    });
+
+    return experienceReducer(state, {
+      type: "webmcp-human-listening-readiness-confirmed",
+      agentPlaybackGranted,
+      comparison,
+      volumeEvent,
+      comparisonEvent,
+    });
+  });
+}
+
+export function prepareWebMcpAdaptation(
+  controller: ExperienceController,
+  variable: "support_mode" | "television_state" | "speaker_position",
+  value:
+    | "none"
+    | "left-one-sided"
+    | "bilateral"
+    | "tv-on"
+    | "tv-off"
+    | "original-position"
+    | "closer-in-front",
+): ExperienceCommitResult {
+  return commitHumanAction(controller, "ready_for_adaptation", (state) => {
+    const option = deriveValidAdaptationOptions(state).find(
+      (candidate) => candidate.variable === variable && candidate.value === value,
+    );
+    if (!option) return null;
+    const input = {
+      requestId: "human-adaptation-preview",
+      expectedRevision: state.webMcp.revision,
+      kind: "adaptation" as const,
+      variable,
+      value,
+    } as PrepareComparisonInput;
+    const settings = settingsForComparison(state, input);
+    const comparison = settings
+      ? createComparisonProjection(state, input, settings)
+      : null;
+    const event = comparison
+      ? humanEvent(state, "comparison_prepared", comparison.comparisonId)
+      : null;
+    return comparison && event
+      ? {
+          type: "webmcp-comparison-prepared",
+          comparison,
+          requestRecord: null,
+          event,
+        }
+      : null;
+  });
+}
+
+export function prepareWebMcpBaselineRecovery(
+  controller: ExperienceController,
+): ExperienceCommitResult {
+  return commitHumanAction(controller, "ready_for_baseline", (state) => {
+    const input: PrepareComparisonInput = {
+      requestId: "human-baseline-recovery-preview",
+      expectedRevision: state.webMcp.revision,
+      kind: "baseline",
+    };
+    const settings = settingsForComparison(state, input);
+    const comparison = settings
+      ? createComparisonProjection(state, input, settings)
+      : null;
+    const event = comparison
+      ? humanEvent(state, "comparison_prepared", comparison.comparisonId)
+      : null;
+    return comparison && event
+      ? {
+          type: "webmcp-comparison-prepared",
+          comparison,
+          requestRecord: null,
+          event,
+        }
+      : null;
+  });
+}
+
 export function prepareComparison(
   controller: ExperienceController,
   rawInput: unknown,
@@ -860,6 +1196,13 @@ export function prepareComparison(
         if (changed.length !== 1 || changed[0] !== key) {
           return Object.freeze({ kind: "error", code: "ONE_VARIABLE_REQUIRED" });
         }
+        const allowed = deriveValidAdaptationOptions(state).some(
+          (option) =>
+            option.variable === input.variable && option.value === input.value,
+        );
+        if (!allowed) {
+          return Object.freeze({ kind: "error", code: "ONE_VARIABLE_REQUIRED" });
+        }
       }
       const comparison = createComparisonProjection(state, input, settings);
       if (!comparison) {
@@ -889,6 +1232,359 @@ export function prepareComparison(
         : Object.freeze({ kind: "success", next, data });
     },
   );
+}
+
+function listeningSequence(
+  playback: ListeningPlayback,
+): readonly ("reference" | "simulated")[] {
+  return playback === "reference-then-simulated"
+    ? Object.freeze(["reference", "simulated"] as const)
+    : Object.freeze([
+        playback === "reference" ? ("reference" as const) : ("simulated" as const),
+      ]);
+}
+
+function listeningNarration(
+  state: ExperienceState,
+  input: PlayListeningComparisonInput,
+) {
+  const comparison = currentComparison(state);
+  const focus =
+    input.focus === "important-speaker"
+      ? "Focus on the important speaker at the center of the conversation, especially the edges of words and consonants."
+      : "Take in the whole scene and notice which voices or household sounds compete for your attention.";
+  const simulatedContext = comparison?.kind === "baseline"
+    ? "B keeps the television on, the speaker in the original position, and adds no support; only the synthetic listening profile changes."
+    : `B uses ${comparison?.settings.supportMode.replaceAll("-", " ")}, ${comparison?.settings.televisionState.replaceAll("-", " ")}, and ${comparison?.settings.speakerPosition.replaceAll("-", " ")}.`;
+  const now =
+    input.playback === "reference"
+      ? `Playing A, the validated source reference. ${focus}`
+      : input.playback === "simulated"
+        ? `Playing B, the current synthetic illustrative result. ${simulatedContext} ${focus}`
+        : `Playing A first, then B from the same eight-second moment. ${focus}`;
+  const next =
+    input.playback === "reference-then-simulated"
+      ? `A has ended. B follows automatically. ${simulatedContext}`
+      : null;
+  return Object.freeze({
+    now,
+    next,
+    after:
+      "Playback has ended. Ask the person what they noticed in their own everyday words; do not ask for enum names.",
+    noDifferenceRecovery:
+      "If they heard no clear difference, acknowledge that answer, replay A then B with important-speaker focus, and ask them to listen for the central voice against the television and overlapping speech.",
+  });
+}
+
+export function playListeningComparison(
+  controller: ExperienceController,
+  rawInput: unknown,
+  options: ExecuteOptions = {},
+): AuralisToolResult<PlayListeningComparisonData> {
+  const parsed = playListeningComparisonInputSchema.safeParse(rawInput);
+  if (!parsed.success) {
+    return errorResult(
+      "play_listening_comparison",
+      null,
+      controller.getSnapshot(),
+      "INVALID_INPUT",
+    );
+  }
+  const input = parsed.data;
+  const canonical = canonicalInput(input);
+  return executeMutation(
+    controller,
+    "play_listening_comparison",
+    input,
+    canonical,
+    playListeningComparisonDataSchema,
+    options,
+    (state) => {
+      const phase = deriveAuralisWebMcpPhase(state);
+      if (!availableListeningPlaybacks(phase).includes(input.playback)) {
+        return Object.freeze({ kind: "error", code: "INVALID_PHASE" });
+      }
+      if (!state.agentPlaybackGranted) {
+        return Object.freeze({ kind: "error", code: "HUMAN_ACTION_REQUIRED" });
+      }
+      if (audioBusy(state)) {
+        return Object.freeze({ kind: "error", code: "AUDIO_BUSY" });
+      }
+      const session = state.webMcp.session;
+      const comparison = currentComparison(state);
+      if (!session || !comparison || comparison.comparisonId !== input.comparisonId) {
+        return Object.freeze({ kind: "error", code: "COMPARISON_MISMATCH" });
+      }
+      if (
+        session.playbackRuns.some(
+          (run) => run.status === "starting" || run.status === "started",
+        )
+      ) {
+        return Object.freeze({ kind: "error", code: "AUDIO_BUSY" });
+      }
+      if (
+        session.playbackRuns.filter(
+          (run) => run.comparisonId === comparison.comparisonId,
+        ).length >= AURALIS_WEBMCP_MAX_PLAYBACK_RUNS_PER_COMPARISON
+      ) {
+        return Object.freeze({ kind: "error", code: "PLAYBACK_LIMIT_REACHED" });
+      }
+
+      const runId = (options.createRunId ?? playbackRunId)();
+      const sequence = listeningSequence(input.playback);
+      const narration = listeningNarration(state, input);
+      const data: PlayListeningComparisonData = Object.freeze({
+        runId,
+        comparisonId: input.comparisonId,
+        playback: input.playback,
+        sequence,
+        focus: input.focus,
+        clipWindow: Object.freeze({
+          startSeconds: 32.3 as const,
+          durationSeconds: 8 as const,
+        }),
+        status: "starting" as const,
+        narration,
+      });
+      const run: WebMcpPlaybackRun = Object.freeze({
+        runId,
+        requestId: input.requestId,
+        canonicalInput: canonical,
+        comparisonId: input.comparisonId,
+        playback: input.playback,
+        focus: input.focus,
+        purpose:
+          requiredPlaybackComplete(comparison) &&
+          input.playback === "reference-then-simulated" &&
+          input.focus === "important-speaker"
+            ? ("no-difference-recovery" as const)
+            : ("initial-listening" as const),
+        sequence,
+        completedModes: Object.freeze([]),
+        status: "starting" as const,
+      });
+      const record: WebMcpRequestRecord = Object.freeze({
+        requestId: input.requestId,
+        tool: "play_listening_comparison",
+        canonicalInput: canonical,
+        data,
+      });
+      const next = experienceReducer(state, {
+        type: "webmcp-agent-playback-reserved",
+        run,
+        requestRecord: record,
+        event: agentEvent(
+          session,
+          state.webMcp.revision + 1,
+          "playback_requested",
+          input.requestId,
+          comparison.comparisonId,
+          runId,
+        ),
+      });
+      return !committedToolState(state, next, input.requestId)
+        ? Object.freeze({ kind: "error", code: "INTERNAL_ERROR" })
+        : Object.freeze({ kind: "success", next, data });
+    },
+  );
+}
+
+export function failWebMcpPlaybackRun(
+  controller: ExperienceController,
+  runId: string,
+): ExperienceCommitResult {
+  return controller.commit((state) => {
+    const session = state.webMcp.session;
+    const run = session?.playbackRuns.find((candidate) => candidate.runId === runId);
+    if (
+      !session ||
+      !run ||
+      (run.status !== "starting" && run.status !== "started") ||
+      state.webMcp.revision >= AURALIS_WEBMCP_MAX_REVISION
+    ) {
+      return state;
+    }
+    return experienceReducer(state, {
+      type: "webmcp-agent-playback-failed",
+      runId,
+      event: agentEvent(
+        session,
+        state.webMcp.revision + 1,
+        "playback_failed",
+        run.requestId,
+        run.comparisonId,
+        run.runId,
+      ),
+    });
+  });
+}
+
+export function cancelWebMcpPlaybackRun(
+  controller: ExperienceController,
+  runId: string,
+): ExperienceCommitResult {
+  return controller.commit((state) => {
+    const session = state.webMcp.session;
+    const run = session?.playbackRuns.find((candidate) => candidate.runId === runId);
+    if (
+      !session ||
+      !run ||
+      (run.status !== "starting" && run.status !== "started") ||
+      state.webMcp.revision >= AURALIS_WEBMCP_MAX_REVISION
+    ) {
+      return state;
+    }
+    const event = Object.freeze({
+      ...agentEvent(
+        session,
+        state.webMcp.revision + 1,
+        "playback_cancelled",
+        run.requestId,
+        run.comparisonId,
+        run.runId,
+      ),
+      actor: "human" as const,
+    });
+    return experienceReducer(state, {
+      type: "webmcp-agent-playback-cancelled",
+      runId,
+      event,
+    });
+  });
+}
+
+export function completeWebMcpNoDifferenceRecovery(
+  controller: ExperienceController,
+  comparisonId: ComparisonProjection["comparisonId"],
+): ExperienceCommitResult {
+  return controller.commit((state) => {
+    const session = state.webMcp.session;
+    const comparison = currentComparison(state);
+    if (
+      !session ||
+      !comparison ||
+      comparison.comparisonId !== comparisonId ||
+      comparison.observationId !== null ||
+      state.webMcp.revision >= AURALIS_WEBMCP_MAX_REVISION
+    ) {
+      return state;
+    }
+    const event = humanEvent(
+      state,
+      "playback_completed",
+      comparisonId,
+      "human",
+    );
+    return event
+      ? experienceReducer(state, {
+          type: "webmcp-no-difference-recovery-completed",
+          comparisonId,
+          event,
+        })
+      : state;
+  });
+}
+
+type ObservationFields = Readonly<{
+  focusedSpeech: RecordUserObservationInput["focusedSpeech"];
+  maskingSources: RecordUserObservationInput["maskingSources"];
+  relativeToPrevious: RecordUserObservationInput["relativeToPrevious"];
+  nextAction: RecordUserObservationInput["nextAction"];
+}>;
+
+type ObservationDecision =
+  | Readonly<{
+      ok: true;
+      observation: ObservationProjection;
+      completionState: "active" | "ready_for_summary";
+      nextPhase: AuralisWebMcpPhase;
+    }>
+  | Readonly<{ ok: false; code: AuralisToolErrorCode }>;
+
+export function noDifferenceRecoveryCount(
+  state: ExperienceState,
+  comparisonId: ComparisonProjection["comparisonId"],
+): 0 | 1 | 2 {
+  return (
+    state.webMcp.session?.noDifferenceRecoveries.find(
+      (candidate) => candidate.comparisonId === comparisonId,
+    )?.completedCount ?? 0
+  );
+}
+
+function observationNeedsFocusedReplay(input: ObservationFields): boolean {
+  return (
+    input.relativeToPrevious === "same" ||
+    input.relativeToPrevious === "unsure" ||
+    (input.focusedSpeech === "unsure" && input.maskingSources.includes("unsure"))
+  );
+}
+
+function decideObservation(
+  state: ExperienceState,
+  comparison: ComparisonProjection,
+  input: ObservationFields,
+): ObservationDecision {
+  const session = state.webMcp.session;
+  if (!session || comparison.observationId !== null) {
+    return Object.freeze({ ok: false, code: "COMPARISON_MISMATCH" });
+  }
+  if (!requiredPlaybackComplete(comparison)) {
+    return Object.freeze({ ok: false, code: "PLAYBACK_REQUIRED" });
+  }
+  if (
+    comparison.kind === "baseline" &&
+    (input.relativeToPrevious !== "not_compared" || input.nextAction !== "continue")
+  ) {
+    return Object.freeze({ ok: false, code: "INVALID_INPUT" });
+  }
+  if (
+    comparison.kind === "adaptation" &&
+    input.relativeToPrevious === "not_compared"
+  ) {
+    return Object.freeze({ ok: false, code: "INVALID_INPUT" });
+  }
+  if (
+    observationNeedsFocusedReplay(input) &&
+    noDifferenceRecoveryCount(state, comparison.comparisonId) === 0
+  ) {
+    return Object.freeze({ ok: false, code: "REPLAY_REQUIRED" });
+  }
+  const adaptationCount = adaptationsUsed(state);
+  if (
+    comparison.kind === "adaptation" &&
+    adaptationCount === AURALIS_WEBMCP_MAX_ADAPTATIONS &&
+    input.nextAction !== "summarize"
+  ) {
+    return Object.freeze({ ok: false, code: "INVALID_INPUT" });
+  }
+  const sequence = session.observations.length + 1;
+  if (sequence < 1 || sequence > 3) {
+    return Object.freeze({ ok: false, code: "SESSION_LIMIT_REACHED" });
+  }
+  const observation: ObservationProjection = Object.freeze({
+    observationId: OBSERVATION_IDS[sequence - 1]!,
+    comparisonId: comparison.comparisonId,
+    focusedSpeech: input.focusedSpeech,
+    maskingSources: input.maskingSources,
+    relativeToPrevious: input.relativeToPrevious,
+    nextAction: input.nextAction,
+  });
+  const completionState =
+    comparison.kind === "adaptation" &&
+    (input.nextAction === "summarize" ||
+      adaptationCount === AURALIS_WEBMCP_MAX_ADAPTATIONS)
+      ? ("ready_for_summary" as const)
+      : ("active" as const);
+  return Object.freeze({
+    ok: true,
+    observation,
+    completionState,
+    nextPhase:
+      completionState === "ready_for_summary"
+        ? ("ready_for_summary" as const)
+        : ("ready_for_adaptation" as const),
+  });
 }
 
 export function recordUserObservation(
@@ -938,48 +1634,11 @@ export function recordUserObservation(
       if (!requiredPlaybackComplete(comparison)) {
         return Object.freeze({ kind: "error", code: "PLAYBACK_REQUIRED" });
       }
-      if (
-        comparison.kind === "baseline" &&
-        (input.relativeToPrevious !== "not_compared" || input.nextAction !== "continue")
-      ) {
-        return Object.freeze({ kind: "error", code: "INVALID_INPUT" });
+      const decision = decideObservation(state, comparison, input);
+      if (!decision.ok) {
+        return Object.freeze({ kind: "error", code: decision.code });
       }
-      if (
-        comparison.kind === "adaptation" &&
-        input.relativeToPrevious === "not_compared"
-      ) {
-        return Object.freeze({ kind: "error", code: "INVALID_INPUT" });
-      }
-      const adaptationCount = adaptationsUsed(state);
-      if (
-        comparison.kind === "adaptation" &&
-        adaptationCount === AURALIS_WEBMCP_MAX_ADAPTATIONS &&
-        input.nextAction !== "summarize"
-      ) {
-        return Object.freeze({ kind: "error", code: "INVALID_INPUT" });
-      }
-      const sequence = session.observations.length + 1;
-      if (sequence < 1 || sequence > 3) {
-        return Object.freeze({ kind: "error", code: "SESSION_LIMIT_REACHED" });
-      }
-      const observation: ObservationProjection = Object.freeze({
-        observationId: OBSERVATION_IDS[sequence - 1]!,
-        comparisonId: input.comparisonId,
-        focusedSpeech: input.focusedSpeech,
-        maskingSources: input.maskingSources,
-        relativeToPrevious: input.relativeToPrevious,
-        nextAction: input.nextAction,
-      });
-      const completionState =
-        comparison.kind === "adaptation" &&
-        (input.nextAction === "summarize" ||
-          adaptationCount === AURALIS_WEBMCP_MAX_ADAPTATIONS)
-          ? ("ready_for_summary" as const)
-          : ("active" as const);
-      const nextPhase: AuralisWebMcpPhase =
-        completionState === "ready_for_summary"
-          ? "ready_for_summary"
-          : "ready_for_adaptation";
+      const { observation, completionState, nextPhase } = decision;
       const data: RecordUserObservationData = Object.freeze({
         observation,
         nextPhase,
@@ -1010,6 +1669,48 @@ export function recordUserObservation(
   );
 }
 
+export function recordWebMcpHumanObservation(
+  controller: ExperienceController,
+  observationInput: Readonly<{
+    focusedSpeech: RecordUserObservationInput["focusedSpeech"];
+    maskingSources: RecordUserObservationInput["maskingSources"];
+    relativeToPrevious: RecordUserObservationInput["relativeToPrevious"];
+    nextAction: RecordUserObservationInput["nextAction"];
+  }>,
+): ExperienceCommitResult {
+  const phase = deriveAuralisWebMcpPhase(controller.getSnapshot());
+  return commitHumanAction(controller, phase, (state) => {
+    if (
+      phase !== "awaiting_baseline_observation" &&
+      phase !== "awaiting_comparison_observation"
+    ) {
+      return null;
+    }
+    const session = state.webMcp.session;
+    const comparison = currentComparison(state);
+    if (!session || !comparison) {
+      return null;
+    }
+    const decision = decideObservation(state, comparison, observationInput);
+    if (!decision.ok) return null;
+    const { observation, completionState } = decision;
+    const event = humanEvent(
+      state,
+      "observation_recorded",
+      comparison.comparisonId,
+    );
+    return event
+      ? {
+          type: "webmcp-observation-recorded",
+          observation,
+          requestRecord: null,
+          event,
+          completionState,
+        }
+      : null;
+  });
+}
+
 function commitHumanAction(
   controller: ExperienceController,
   phase: AuralisWebMcpPhase,
@@ -1037,14 +1738,19 @@ export function confirmWebMcpConsent(
   });
 }
 
-export function confirmWebMcpProfile(
+export function selectWebMcpProfile(
   controller: ExperienceController,
-  sourceIdentity: string,
+  profileId: ProfileId,
 ): ExperienceCommitResult {
-  return commitHumanAction(controller, "awaiting_profile_confirmation", (state) => {
+  return commitHumanAction(controller, "awaiting_profile_selection", (state) => {
     const event = humanEvent(state, "profile_confirmed");
     return event
-      ? { type: "webmcp-human-profile-confirmed", sourceIdentity, event }
+      ? {
+          type: "webmcp-human-profile-selected",
+          profileId,
+          sourceIdentity: FAMILY_DINNER_SOURCE_ID,
+          event,
+        }
       : null;
   });
 }

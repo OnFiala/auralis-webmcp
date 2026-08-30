@@ -6,6 +6,12 @@ export const MANUAL_THRESHOLD_MIN_DB_HL = 0;
 export const MANUAL_THRESHOLD_MAX_DB_HL = 100;
 export const MANUAL_THRESHOLD_STEP_DB_HL = 5;
 export const MANUAL_PROFILE_ENTRY_LABEL = "Enter an audiogram";
+export const PREDEFINED_PROFILE_SET_VERSIONS = [
+  "auralis-synthetic-presets-v1",
+  "auralis-synthetic-presets-v2",
+] as const;
+export const ACTIVE_PREDEFINED_PROFILE_SET_VERSION =
+  "auralis-synthetic-presets-v2" as const;
 export const PREDEFINED_PROFILE_IDS = [
   "high-frequency-hearing-loss",
   "flat-hearing-loss",
@@ -16,6 +22,8 @@ export type Ear = "left" | "right";
 export type FrequencyHz = (typeof FREQUENCY_GRID_HZ)[number];
 export type FrequencyKey = (typeof FREQUENCY_KEYS)[number];
 export type PredefinedProfileId = (typeof PREDEFINED_PROFILE_IDS)[number];
+export type PredefinedProfileSetVersion =
+  (typeof PREDEFINED_PROFILE_SET_VERSIONS)[number];
 export type ProfileEntryOption = "manual" | PredefinedProfileId;
 
 export type EarThresholds = Readonly<Record<FrequencyKey, number>>;
@@ -28,6 +36,7 @@ export type ManualAudiogramDraft = Readonly<{
 
 export type PredefinedHearingProfile = Readonly<{
   id: PredefinedProfileId;
+  profileSetVersion: PredefinedProfileSetVersion;
   displayName: string;
   rightThresholdsDbHl: EarThresholds;
   leftThresholdsDbHl: EarThresholds;
@@ -38,6 +47,7 @@ export type ConfirmedHearingProfile = Readonly<{
   profileId: string;
   sourceType: "manual" | "predefined";
   predefinedProfileId: PredefinedProfileId | null;
+  predefinedProfileSetVersion: PredefinedProfileSetVersion | null;
   displayName: string;
   frequencyGridHz: typeof FREQUENCY_GRID_HZ;
   leftThresholdsDbHl: EarThresholds;
@@ -79,6 +89,7 @@ const manualAudiogramSchema = z
 const predefinedProfileSchema = z
   .object({
     id: z.enum(PREDEFINED_PROFILE_IDS),
+    profileSetVersion: z.enum(PREDEFINED_PROFILE_SET_VERSIONS),
     displayName: z.string().trim().min(1),
     rightThresholdsDbHl: earThresholdsSchema,
     leftThresholdsDbHl: earThresholdsSchema,
@@ -111,71 +122,110 @@ function definePredefinedProfile(input: unknown): PredefinedHearingProfile {
   });
 }
 
-export const PREDEFINED_HEARING_PROFILES = Object.freeze([
-  definePredefinedProfile({
-    id: "high-frequency-hearing-loss",
+const PREDEFINED_PROFILE_V1_FIXTURES = Object.freeze([
+  {
+    id: "high-frequency-hearing-loss" as const,
     displayName: "High-frequency hearing loss",
-    rightThresholdsDbHl: {
+    rightThresholdsDbHl: Object.freeze({
       "250": 20,
       "500": 20,
       "1000": 25,
       "2000": 35,
       "4000": 55,
       "8000": 70,
-    },
-    leftThresholdsDbHl: {
+    }),
+    leftThresholdsDbHl: Object.freeze({
       "250": 20,
       "500": 20,
       "1000": 25,
       "2000": 35,
       "4000": 55,
       "8000": 70,
-    },
-    classification: "synthetic-illustrative",
-  }),
-  definePredefinedProfile({
-    id: "flat-hearing-loss",
+    }),
+  },
+  {
+    id: "flat-hearing-loss" as const,
     displayName: "Flat hearing loss",
-    rightThresholdsDbHl: {
+    rightThresholdsDbHl: Object.freeze({
       "250": 45,
       "500": 45,
       "1000": 45,
       "2000": 45,
       "4000": 45,
       "8000": 45,
-    },
-    leftThresholdsDbHl: {
+    }),
+    leftThresholdsDbHl: Object.freeze({
       "250": 45,
       "500": 45,
       "1000": 45,
       "2000": 45,
       "4000": 45,
       "8000": 45,
-    },
-    classification: "synthetic-illustrative",
-  }),
-  definePredefinedProfile({
-    id: "asymmetric-hearing-loss",
+    }),
+  },
+  {
+    id: "asymmetric-hearing-loss" as const,
     displayName: "Asymmetric hearing loss",
-    rightThresholdsDbHl: {
+    rightThresholdsDbHl: Object.freeze({
       "250": 20,
       "500": 20,
       "1000": 25,
       "2000": 30,
       "4000": 35,
       "8000": 40,
-    },
-    leftThresholdsDbHl: {
+    }),
+    leftThresholdsDbHl: Object.freeze({
       "250": 45,
       "500": 50,
       "1000": 55,
       "2000": 60,
       "4000": 65,
       "8000": 70,
-    },
-    classification: "synthetic-illustrative",
-  }),
+    }),
+  },
 ]);
+
+const PREDEFINED_PROFILE_OFFSET_BY_VERSION: Readonly<
+  Record<PredefinedProfileSetVersion, 0 | 10>
+> = Object.freeze({
+  "auralis-synthetic-presets-v1": 0,
+  "auralis-synthetic-presets-v2": 10,
+});
+
+function shiftedThresholds(
+  thresholds: EarThresholds,
+  offsetDbHl: 0 | 10,
+): EarThresholds {
+  return Object.freeze(
+    Object.fromEntries(
+      FREQUENCY_KEYS.map((frequency) => [
+        frequency,
+        thresholds[frequency] + offsetDbHl,
+      ]),
+    ) as Record<FrequencyKey, number>,
+  );
+}
+
+const activePredefinedOffset =
+  PREDEFINED_PROFILE_OFFSET_BY_VERSION[ACTIVE_PREDEFINED_PROFILE_SET_VERSION];
+
+export const PREDEFINED_HEARING_PROFILES = Object.freeze(
+  PREDEFINED_PROFILE_V1_FIXTURES.map((fixture) =>
+    definePredefinedProfile({
+      ...fixture,
+      profileSetVersion: ACTIVE_PREDEFINED_PROFILE_SET_VERSION,
+      rightThresholdsDbHl: shiftedThresholds(
+        fixture.rightThresholdsDbHl,
+        activePredefinedOffset,
+      ),
+      leftThresholdsDbHl: shiftedThresholds(
+        fixture.leftThresholdsDbHl,
+        activePredefinedOffset,
+      ),
+      classification: "synthetic-illustrative",
+    }),
+  ),
+);
 
 if (
   PREDEFINED_HEARING_PROFILES.length !== 3 ||
@@ -269,13 +319,14 @@ function serializeThresholds(ear: EarThresholds): string {
 function profileIdentity(
   sourceType: "manual" | "predefined",
   predefinedProfileId: PredefinedProfileId | null,
+  predefinedProfileSetVersion: PredefinedProfileSetVersion | null,
   left: EarThresholds,
   right: EarThresholds,
 ): string {
   const origin =
     sourceType === "manual"
       ? "manual-v1"
-      : `predefined-v1:${predefinedProfileId ?? "invalid"}`;
+      : `predefined:${predefinedProfileSetVersion ?? "invalid"}:${predefinedProfileId ?? "invalid"}`;
 
   return `${origin}:L${serializeThresholds(left)}:R${serializeThresholds(right)}`;
 }
@@ -283,6 +334,7 @@ function profileIdentity(
 function createConfirmedProfile(
   sourceType: "manual" | "predefined",
   predefinedProfileId: PredefinedProfileId | null,
+  predefinedProfileSetVersion: PredefinedProfileSetVersion | null,
   displayName: string,
   left: EarThresholds,
   right: EarThresholds,
@@ -293,9 +345,16 @@ function createConfirmedProfile(
   }
 
   return Object.freeze({
-    profileId: profileIdentity(sourceType, predefinedProfileId, left, right),
+    profileId: profileIdentity(
+      sourceType,
+      predefinedProfileId,
+      predefinedProfileSetVersion,
+      left,
+      right,
+    ),
     sourceType,
     predefinedProfileId,
+    predefinedProfileSetVersion,
     displayName,
     frequencyGridHz: FREQUENCY_GRID_HZ,
     leftThresholdsDbHl: left,
@@ -327,6 +386,7 @@ export function confirmManualAudiogram(
   return createConfirmedProfile(
     "manual",
     null,
+    null,
     MANUAL_PROFILE_ENTRY_LABEL,
     left,
     right,
@@ -356,6 +416,7 @@ export function confirmPredefinedProfile(
   return createConfirmedProfile(
     "predefined",
     fixture.id,
+    fixture.profileSetVersion,
     fixture.displayName,
     fixture.leftThresholdsDbHl,
     fixture.rightThresholdsDbHl,

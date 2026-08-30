@@ -13,6 +13,7 @@ import {
   type ExperienceState,
 } from "./experience";
 import {
+  ACTIVE_PREDEFINED_PROFILE_SET_VERSION,
   FREQUENCY_KEYS,
   PREDEFINED_HEARING_PROFILES,
   ProfileValidationError,
@@ -55,20 +56,20 @@ const EXPECTED_PREDEFINED_PROFILES = [
   {
     id: "high-frequency-hearing-loss",
     displayName: "High-frequency hearing loss",
-    right: [20, 20, 25, 35, 55, 70],
-    left: [20, 20, 25, 35, 55, 70],
+    right: [30, 30, 35, 45, 65, 80],
+    left: [30, 30, 35, 45, 65, 80],
   },
   {
     id: "flat-hearing-loss",
     displayName: "Flat hearing loss",
-    right: [45, 45, 45, 45, 45, 45],
-    left: [45, 45, 45, 45, 45, 45],
+    right: [55, 55, 55, 55, 55, 55],
+    left: [55, 55, 55, 55, 55, 55],
   },
   {
     id: "asymmetric-hearing-loss",
     displayName: "Asymmetric hearing loss",
-    right: [20, 20, 25, 30, 35, 40],
-    left: [45, 50, 55, 60, 65, 70],
+    right: [30, 30, 35, 40, 45, 50],
+    left: [55, 60, 65, 70, 75, 80],
   },
 ] as const;
 
@@ -264,6 +265,7 @@ describe("manual hearing profile", () => {
     const profile = confirmedProfile();
 
     expect(profile.sourceType).toBe("manual");
+    expect(profile.predefinedProfileSetVersion).toBeNull();
     expect(profile.leftThresholdsDbHl["2000"]).toBe(45);
     expect(profile.rightThresholdsDbHl["2000"]).toBe(35);
     expect(profile.leftThresholdsDbHl["4000"]).toBe(60);
@@ -348,6 +350,9 @@ describe("synthetic predefined hearing profiles", () => {
 
     for (const profile of PREDEFINED_HEARING_PROFILES) {
       expect(profile.classification).toBe("synthetic-illustrative");
+      expect(profile.profileSetVersion).toBe(
+        ACTIVE_PREDEFINED_PROFILE_SET_VERSION,
+      );
       expect(Object.isFrozen(profile)).toBe(true);
       expect(Object.isFrozen(profile.rightThresholdsDbHl)).toBe(true);
       expect(Object.isFrozen(profile.leftThresholdsDbHl)).toBe(true);
@@ -385,6 +390,12 @@ describe("synthetic predefined hearing profiles", () => {
 
       expect(confirmed.sourceType).toBe("predefined");
       expect(confirmed.predefinedProfileId).toBe(fixture.id);
+      expect(confirmed.predefinedProfileSetVersion).toBe(
+        ACTIVE_PREDEFINED_PROFILE_SET_VERSION,
+      );
+      expect(confirmed.profileId).toContain(
+        ACTIVE_PREDEFINED_PROFILE_SET_VERSION,
+      );
       expect(confirmed.displayName).toBe(fixture.displayName);
       expect(confirmed.rightThresholdsDbHl).toEqual(
         fixture.rightThresholdsDbHl,
@@ -533,6 +544,12 @@ describe("genuine support progression", () => {
       expect(supportedThresholdToGainDb(threshold)).toBeLessThanOrEqual(0);
     }
     expect(supportedThresholdToGainDb(100)).toBe(-15);
+    expect(supportCompensationDb(75)).toBe(SUPPORT_MAX_COMPENSATION_DB);
+    expect(supportCompensationDb(80)).toBe(SUPPORT_MAX_COMPENSATION_DB);
+    expect(thresholdToGainDb(75)).toBe(-18);
+    expect(thresholdToGainDb(80)).toBe(-19.2);
+    expect(supportedThresholdToGainDb(75)).toBe(-9);
+    expect(supportedThresholdToGainDb(80)).toBe(-10.2);
   });
 
   it("is deterministic, same-source and frequency-specific for every support mode", () => {

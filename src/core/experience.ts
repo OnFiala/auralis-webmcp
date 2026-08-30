@@ -9,7 +9,10 @@ import {
 import type {
   AuralisToolName,
   ComparisonProjection,
+  ListeningFocus,
+  ListeningPlayback,
   ObservationProjection,
+  PlaybackMode,
   ProfileId,
   SessionEvidenceEvent,
 } from "../contracts/webmcp";
@@ -98,6 +101,7 @@ type PlaybackState =
       interventionState: null;
       speakerPositionState: null;
       resultIdentity: null;
+      runId: null;
     }>
   | Readonly<{
       status: "playing";
@@ -106,6 +110,7 @@ type PlaybackState =
       interventionState: InterventionState;
       speakerPositionState: SpeakerPositionState;
       resultIdentity: string;
+      runId: string | null;
     }>
   | Readonly<{
       status: "failed";
@@ -114,6 +119,7 @@ type PlaybackState =
       interventionState: null;
       speakerPositionState: null;
       resultIdentity: null;
+      runId: null;
     }>;
 
 export type ValidatedFailureCode =
@@ -141,12 +147,31 @@ export type WebMcpRequestRecord = Readonly<{
 export type WebMcpPendingPlayback = Readonly<{
   comparisonId: ComparisonProjection["comparisonId"];
   mode: ExperienceComparisonMode;
+  runId: string | null;
+}>;
+
+export type WebMcpPlaybackRun = Readonly<{
+  runId: string;
+  requestId: string;
+  canonicalInput: string;
+  comparisonId: ComparisonProjection["comparisonId"];
+  playback: ListeningPlayback;
+  focus: ListeningFocus;
+  purpose: "initial-listening" | "no-difference-recovery";
+  sequence: readonly PlaybackMode[];
+  completedModes: readonly PlaybackMode[];
+  status: "starting" | "started" | "completed" | "cancelled" | "failed";
+}>;
+
+export type WebMcpNoDifferenceRecovery = Readonly<{
+  comparisonId: ComparisonProjection["comparisonId"];
+  completedCount: 1 | 2;
 }>;
 
 export type WebMcpSessionState = Readonly<{
   sessionId: string;
   goal: "family-understanding";
-  stagedProfileId: ProfileId;
+  stagedProfileId: ProfileId | null;
   confirmedProfileId: ProfileId | null;
   consentConfirmed: boolean;
   stageCount: 1 | 2;
@@ -154,6 +179,8 @@ export type WebMcpSessionState = Readonly<{
   observations: readonly ObservationProjection[];
   events: readonly SessionEvidenceEvent[];
   pendingPlayback: WebMcpPendingPlayback | null;
+  playbackRuns: readonly WebMcpPlaybackRun[];
+  noDifferenceRecoveries: readonly WebMcpNoDifferenceRecovery[];
   completionState: "active" | "ready_for_summary" | "complete";
 }>;
 
@@ -182,6 +209,7 @@ export type ExperienceState = Readonly<{
   source: SourceState;
   renders: Readonly<Record<ComparisonMode, RenderState>>;
   lowVolumeAcknowledged: boolean;
+  agentPlaybackGranted: boolean;
   playback: PlaybackState;
   modelGroundingRevision: number;
   modelAttemptsUsed: number;
@@ -236,9 +264,18 @@ export type ExperienceAction =
       sourceIdentity: string;
       resultIdentity: string;
       peakDbFs: number;
+      actor?: "human" | "agent";
+      runId?: string;
     }>
-  | Readonly<{ type: "playback-stopped" }>
-  | Readonly<{ type: "playback-ended"; resultIdentity: string }>
+  | Readonly<{
+      type: "playback-stopped";
+      runId?: string;
+    }>
+  | Readonly<{
+      type: "playback-ended";
+      resultIdentity: string;
+      runId?: string;
+    }>
   | Readonly<{
       type: "model-request-started";
       request: ModelExplanationRequest;
@@ -252,7 +289,6 @@ export type ExperienceAction =
   | Readonly<{
       type: "webmcp-session-staged";
       sessionId: string;
-      profileId: ProfileId;
       requestRecord: WebMcpRequestRecord;
       event: SessionEvidenceEvent;
     }>
@@ -261,22 +297,58 @@ export type ExperienceAction =
       event: SessionEvidenceEvent;
     }>
   | Readonly<{
-      type: "webmcp-human-profile-confirmed";
+      type: "webmcp-agent-profile-selected";
+      profileId: ProfileId;
+      sourceIdentity: string;
+      requestRecord: WebMcpRequestRecord;
+      event: SessionEvidenceEvent;
+    }>
+  | Readonly<{
+      type: "webmcp-human-profile-selected";
+      profileId: ProfileId;
       sourceIdentity: string;
       event: SessionEvidenceEvent;
     }>
   | Readonly<{
       type: "webmcp-comparison-prepared";
       comparison: ComparisonProjection;
-      requestRecord: WebMcpRequestRecord;
+      requestRecord: WebMcpRequestRecord | null;
       event: SessionEvidenceEvent;
     }>
   | Readonly<{
       type: "webmcp-observation-recorded";
       observation: ObservationProjection;
-      requestRecord: WebMcpRequestRecord;
+      requestRecord: WebMcpRequestRecord | null;
       event: SessionEvidenceEvent;
       completionState: "active" | "ready_for_summary";
+    }>
+  | Readonly<{
+      type: "webmcp-human-listening-readiness-confirmed";
+      agentPlaybackGranted: boolean;
+      comparison: ComparisonProjection;
+      volumeEvent: SessionEvidenceEvent;
+      comparisonEvent: SessionEvidenceEvent;
+    }>
+  | Readonly<{
+      type: "webmcp-agent-playback-reserved";
+      run: WebMcpPlaybackRun;
+      requestRecord: WebMcpRequestRecord;
+      event: SessionEvidenceEvent;
+    }>
+  | Readonly<{
+      type: "webmcp-agent-playback-failed";
+      runId: string;
+      event: SessionEvidenceEvent;
+    }>
+  | Readonly<{
+      type: "webmcp-agent-playback-cancelled";
+      runId: string;
+      event: SessionEvidenceEvent;
+    }>
+  | Readonly<{
+      type: "webmcp-no-difference-recovery-completed";
+      comparisonId: ComparisonProjection["comparisonId"];
+      event: SessionEvidenceEvent;
     }>
   | Readonly<{
       type: "webmcp-human-session-finished";
@@ -315,6 +387,7 @@ const stoppedPlayback = (): PlaybackState =>
     interventionState: null,
     speakerPositionState: null,
     resultIdentity: null,
+    runId: null,
   });
 
 const idleModelState = (): ModelState =>
@@ -342,6 +415,7 @@ export function createInitialExperienceState(): ExperienceState {
     source: Object.freeze({ status: "idle" as const }),
     renders: idleRenders(),
     lowVolumeAcknowledged: false,
+    agentPlaybackGranted: false,
     playback: stoppedPlayback(),
     modelGroundingRevision: 0,
     modelAttemptsUsed: 0,
@@ -876,6 +950,24 @@ function reduceExperienceState(
       const expectedIdentity = expectedResultIdentity(state, action.mode);
       const expectedSupportMode =
         action.mode === "reference" ? null : state.supportMode;
+      const run = action.runId
+        ? state.webMcp.session?.playbackRuns.find(
+            (candidate) => candidate.runId === action.runId,
+          ) ?? null
+        : null;
+      const runMatches = action.runId
+        ? Boolean(
+            run &&
+              run.status === "starting" &&
+              run.comparisonId ===
+                state.webMcp.session?.comparisons.at(-1)?.comparisonId &&
+              run.sequence[run.completedModes.length] === action.mode,
+          )
+        : true;
+
+      if (action.runId && !runMatches) {
+        return state;
+      }
 
       if (
         !state.lowVolumeAcknowledged ||
@@ -910,6 +1002,7 @@ function reduceExperienceState(
           interventionState: state.interventionState,
           speakerPositionState: state.speakerPositionState,
           resultIdentity: action.resultIdentity,
+          runId: action.runId ?? null,
         }),
         completionState: "in-progress" as const,
         failure: null,
@@ -917,6 +1010,12 @@ function reduceExperienceState(
     }
 
     case "playback-stopped": {
+      if (
+        state.playback.status === "playing" &&
+        state.playback.runId !== (action.runId ?? null)
+      ) {
+        return state;
+      }
       const resetInterruptedRender = (render: RenderState): RenderState =>
         render.status === "rendering"
           ? Object.freeze({ status: "idle" as const })
@@ -936,7 +1035,8 @@ function reduceExperienceState(
     case "playback-ended": {
       if (
         state.playback.status !== "playing" ||
-        state.playback.resultIdentity !== action.resultIdentity
+        state.playback.resultIdentity !== action.resultIdentity ||
+        state.playback.runId !== (action.runId ?? null)
       ) {
         return state;
       }
@@ -1050,27 +1150,24 @@ function reduceExperienceState(
     }
 
     case "webmcp-session-staged": {
-      const currentSession = state.webMcp.session;
-      const session: WebMcpSessionState = currentSession
-        ? Object.freeze({
-            ...currentSession,
-            stagedProfileId: action.profileId,
-            stageCount: 2 as const,
-            events: Object.freeze([...currentSession.events, action.event]),
-          })
-        : Object.freeze({
-            sessionId: action.sessionId,
-            goal: "family-understanding" as const,
-            stagedProfileId: action.profileId,
-            confirmedProfileId: null,
-            consentConfirmed: false,
-            stageCount: 1 as const,
-            comparisons: Object.freeze([]),
-            observations: Object.freeze([]),
-            events: Object.freeze([action.event]),
-            pendingPlayback: null,
-            completionState: "active" as const,
-          });
+      if (state.webMcp.session) {
+        return rejectTransition(state, "invalid-transition");
+      }
+      const session: WebMcpSessionState = Object.freeze({
+        sessionId: action.sessionId,
+        goal: "family-understanding" as const,
+        stagedProfileId: null,
+        confirmedProfileId: null,
+        consentConfirmed: false,
+        stageCount: 1 as const,
+        comparisons: Object.freeze([]),
+        observations: Object.freeze([]),
+        events: Object.freeze([action.event]),
+        pendingPlayback: null,
+        playbackRuns: Object.freeze([]),
+        noDifferenceRecoveries: Object.freeze([]),
+        completionState: "active" as const,
+      });
 
       return Object.freeze({
         ...state,
@@ -1106,7 +1203,8 @@ function reduceExperienceState(
       });
     }
 
-    case "webmcp-human-profile-confirmed": {
+    case "webmcp-agent-profile-selected":
+    case "webmcp-human-profile-selected": {
       const session = state.webMcp.session;
       if (
         !session ||
@@ -1118,21 +1216,30 @@ function reduceExperienceState(
       }
 
       const profile = confirmPredefinedProfile(
-        session.stagedProfileId,
+        action.profileId,
         state.draftRevision,
       );
       const confirmed = confirmProfile(state, profile, action.sourceIdentity);
+      const selectedByAgent = action.type === "webmcp-agent-profile-selected";
 
       return Object.freeze({
         ...confirmed,
-        selectedProfileEntry: session.stagedProfileId,
+        selectedProfileEntry: action.profileId,
         webMcp: Object.freeze({
           ...confirmed.webMcp,
           session: Object.freeze({
             ...session,
-            confirmedProfileId: session.stagedProfileId,
+            stagedProfileId: action.profileId,
+            confirmedProfileId: action.profileId,
+            stageCount: selectedByAgent ? (2 as const) : session.stageCount,
             events: Object.freeze([...session.events, action.event]),
           }),
+          requestRecords: selectedByAgent
+            ? Object.freeze([
+                ...confirmed.webMcp.requestRecords,
+                action.requestRecord,
+              ])
+            : confirmed.webMcp.requestRecords,
         }),
         failure: null,
       });
@@ -1163,10 +1270,12 @@ function reduceExperienceState(
             pendingPlayback: null,
             events: Object.freeze([...session.events, action.event]),
           }),
-          requestRecords: Object.freeze([
-            ...state.webMcp.requestRecords,
-            action.requestRecord,
-          ]),
+          requestRecords: action.requestRecord
+            ? Object.freeze([
+                ...state.webMcp.requestRecords,
+                action.requestRecord,
+              ])
+            : state.webMcp.requestRecords,
         }),
         failure: null,
       });
@@ -1201,10 +1310,202 @@ function reduceExperienceState(
             completionState: action.completionState,
             events: Object.freeze([...session.events, action.event]),
           }),
+          requestRecords: action.requestRecord
+            ? Object.freeze([
+                ...state.webMcp.requestRecords,
+                action.requestRecord,
+              ])
+            : state.webMcp.requestRecords,
+        }),
+        failure: null,
+      });
+    }
+
+    case "webmcp-human-listening-readiness-confirmed": {
+      const session = state.webMcp.session;
+      if (
+        !session ||
+        !session.confirmedProfileId ||
+        state.source.status !== "ready" ||
+        state.lowVolumeAcknowledged ||
+        session.comparisons.length !== 0
+      ) {
+        return rejectTransition(state, "invalid-transition");
+      }
+
+      return Object.freeze({
+        ...state,
+        lowVolumeAcknowledged: true,
+        agentPlaybackGranted: action.agentPlaybackGranted,
+        supportMode: action.comparison.settings.supportMode,
+        interventionState: action.comparison.settings.televisionState,
+        speakerPositionState: action.comparison.settings.speakerPosition,
+        renders: idleRenders(),
+        playback: stoppedPlayback(),
+        ...invalidatedModelAndCompletionState(state),
+        webMcp: Object.freeze({
+          ...state.webMcp,
+          session: Object.freeze({
+            ...session,
+            comparisons: Object.freeze([action.comparison]),
+            events: Object.freeze([
+              ...session.events,
+              action.volumeEvent,
+              action.comparisonEvent,
+            ]),
+          }),
+        }),
+        failure: null,
+      });
+    }
+
+    case "webmcp-agent-playback-reserved": {
+      const session = state.webMcp.session;
+      if (!session) {
+        return rejectTransition(state, "invalid-transition");
+      }
+
+      return Object.freeze({
+        ...state,
+        webMcp: Object.freeze({
+          ...state.webMcp,
+          session: Object.freeze({
+            ...session,
+            playbackRuns: Object.freeze([
+              ...session.playbackRuns,
+              action.run,
+            ]),
+            events: Object.freeze([...session.events, action.event]),
+          }),
           requestRecords: Object.freeze([
             ...state.webMcp.requestRecords,
             action.requestRecord,
           ]),
+        }),
+        failure: null,
+      });
+    }
+
+    case "webmcp-agent-playback-failed": {
+      const session = state.webMcp.session;
+      const run = session?.playbackRuns.find(
+        (candidate) => candidate.runId === action.runId,
+      );
+      if (!session || !run || run.status === "completed" || run.status === "cancelled") {
+        return rejectTransition(state, "invalid-transition");
+      }
+
+      return Object.freeze({
+        ...state,
+        playback:
+          state.playback.status === "playing" &&
+          state.playback.runId === action.runId
+            ? stoppedPlayback()
+            : state.playback,
+        webMcp: Object.freeze({
+          ...state.webMcp,
+          session: Object.freeze({
+            ...session,
+            pendingPlayback:
+              session.pendingPlayback?.runId === action.runId
+                ? null
+                : session.pendingPlayback,
+            playbackRuns: Object.freeze(
+              session.playbackRuns.map((candidate) =>
+                candidate.runId === action.runId
+                  ? Object.freeze({ ...candidate, status: "failed" as const })
+                  : candidate,
+              ),
+            ),
+            events: Object.freeze([...session.events, action.event]),
+          }),
+        }),
+        failure: null,
+      });
+    }
+
+    case "webmcp-agent-playback-cancelled": {
+      const session = state.webMcp.session;
+      const run = session?.playbackRuns.find(
+        (candidate) => candidate.runId === action.runId,
+      );
+      if (
+        !session ||
+        !run ||
+        (run.status !== "starting" && run.status !== "started")
+      ) {
+        return state;
+      }
+      const resetInterruptedRender = (render: RenderState): RenderState =>
+        render.status === "rendering"
+          ? Object.freeze({ status: "idle" as const })
+          : render;
+
+      return Object.freeze({
+        ...state,
+        renders: Object.freeze({
+          reference: resetInterruptedRender(state.renders.reference),
+          simulated: resetInterruptedRender(state.renders.simulated),
+        }),
+        playback:
+          state.playback.status === "playing" &&
+          state.playback.runId === action.runId
+            ? stoppedPlayback()
+            : state.playback,
+        webMcp: Object.freeze({
+          ...state.webMcp,
+          session: Object.freeze({
+            ...session,
+            pendingPlayback:
+              session.pendingPlayback?.runId === action.runId
+                ? null
+                : session.pendingPlayback,
+            playbackRuns: Object.freeze(
+              session.playbackRuns.map((candidate) =>
+                candidate.runId === action.runId
+                  ? Object.freeze({ ...candidate, status: "cancelled" as const })
+                  : candidate,
+              ),
+            ),
+            events: Object.freeze([...session.events, action.event]),
+          }),
+        }),
+        failure: null,
+      });
+    }
+
+    case "webmcp-no-difference-recovery-completed": {
+      const session = state.webMcp.session;
+      const comparison = session?.comparisons.find(
+        (candidate) => candidate.comparisonId === action.comparisonId,
+      );
+      if (!session || !comparison || comparison.observationId !== null) {
+        return state;
+      }
+      const existing = session.noDifferenceRecoveries.find(
+        (candidate) => candidate.comparisonId === action.comparisonId,
+      );
+      if (existing?.completedCount === 2) {
+        return state;
+      }
+      const recovery: WebMcpNoDifferenceRecovery = Object.freeze({
+        comparisonId: action.comparisonId,
+        completedCount: existing ? (2 as const) : (1 as const),
+      });
+      return Object.freeze({
+        ...state,
+        webMcp: Object.freeze({
+          ...state.webMcp,
+          session: Object.freeze({
+            ...session,
+            noDifferenceRecoveries: Object.freeze([
+              ...session.noDifferenceRecoveries.filter(
+                (candidate) => candidate.comparisonId !== action.comparisonId,
+              ),
+              recovery,
+            ]),
+            events: Object.freeze([...session.events, action.event]),
+          }),
         }),
         failure: null,
       });
@@ -1258,6 +1559,7 @@ function reduceExperienceState(
           interventionState: null,
           speakerPositionState: null,
           resultIdentity: null,
+          runId: null,
         }),
         completionState: "in-progress" as const,
         failure: failure(action.code),
@@ -1279,6 +1581,7 @@ const semanticStateKeys = [
   "source",
   "renders",
   "lowVolumeAcknowledged",
+  "agentPlaybackGranted",
   "playback",
   "modelGroundingRevision",
   "modelAttemptsUsed",
@@ -1298,14 +1601,18 @@ function evidenceEvent(
   revision: number,
   action: SessionEvidenceEvent["action"],
   comparisonId: SessionEvidenceEvent["comparisonId"] = null,
+  actor: SessionEvidenceEvent["actor"] = "human",
+  requestId: SessionEvidenceEvent["requestId"] = null,
+  runId: SessionEvidenceEvent["runId"] = null,
 ): SessionEvidenceEvent {
   return Object.freeze({
     sequence: session.events.length + 1,
     revision,
-    actor: "human" as const,
+    actor,
     action,
-    requestId: null,
+    requestId,
     comparisonId,
+    runId,
   });
 }
 
@@ -1356,7 +1663,13 @@ function sessionAfterHumanTransition(
       ...session,
       events: Object.freeze([
         ...session.events,
-        evidenceEvent(session, revision, "scene_loaded"),
+        evidenceEvent(
+          session,
+          revision,
+          "scene_loaded",
+          null,
+          "system",
+        ),
       ]),
     });
   }
@@ -1377,17 +1690,34 @@ function sessionAfterHumanTransition(
 
   if (action.type === "playback-started") {
     const comparison = session.comparisons.at(-1) ?? null;
+    const run = action.runId
+      ? session.playbackRuns.find((candidate) => candidate.runId === action.runId)
+      : null;
     if (
       comparison &&
-      !comparison.heardPlaybackModes.includes(action.mode) &&
-      !session.pendingPlayback
+      !session.pendingPlayback &&
+      (!action.runId ||
+        (run &&
+          run.status === "starting" &&
+          run.comparisonId === comparison.comparisonId &&
+          run.sequence[run.completedModes.length] === action.mode))
     ) {
       session = Object.freeze({
         ...session,
         pendingPlayback: Object.freeze({
           comparisonId: comparison.comparisonId,
           mode: action.mode,
+          runId: action.runId ?? null,
         }),
+        playbackRuns: action.runId
+          ? Object.freeze(
+              session.playbackRuns.map((candidate) =>
+                candidate.runId === action.runId
+                  ? Object.freeze({ ...candidate, status: "started" as const })
+                  : candidate,
+              ),
+            )
+          : session.playbackRuns,
         events: Object.freeze([
           ...session.events,
           evidenceEvent(
@@ -1395,6 +1725,9 @@ function sessionAfterHumanTransition(
             revision,
             "playback_started",
             comparison.comparisonId,
+            action.actor ?? "human",
+            run?.requestId ?? null,
+            run?.runId ?? null,
           ),
         ]),
       });
@@ -1403,14 +1736,30 @@ function sessionAfterHumanTransition(
 
   if (
     (action.type === "playback-stopped" || action.type === "playback-ended") &&
-    session.pendingPlayback
+    session.pendingPlayback &&
+    session.pendingPlayback.runId === (action.runId ?? null)
   ) {
     const pending = session.pendingPlayback;
+    // Only a natural media end proves that the clip was heard. Stop is always
+    // cancellation, even if it happened near the end of the clip.
+    const completed = action.type === "playback-ended";
+    const runId = action.runId ?? pending.runId;
+    const run = runId
+      ? session.playbackRuns.find((candidate) => candidate.runId === runId)
+      : null;
+    const completedModes =
+      run && completed && !run.completedModes.includes(pending.mode)
+        ? Object.freeze([...run.completedModes, pending.mode])
+        : run?.completedModes ?? Object.freeze([]);
+    const runFinished =
+      Boolean(run) && completedModes.length === run!.sequence.length;
+    const runCancelled = Boolean(run) && action.type === "playback-stopped";
     session = Object.freeze({
       ...session,
       comparisons: Object.freeze(
         session.comparisons.map((comparison) =>
           comparison.comparisonId === pending.comparisonId &&
+          completed &&
           !comparison.heardPlaybackModes.includes(pending.mode)
             ? Object.freeze({
                 ...comparison,
@@ -1422,8 +1771,66 @@ function sessionAfterHumanTransition(
             : comparison,
         ),
       ),
+      playbackRuns: run
+        ? Object.freeze(
+            session.playbackRuns.map((candidate) =>
+              candidate.runId === run.runId
+                ? Object.freeze({
+                    ...candidate,
+                    completedModes,
+                    status: runCancelled
+                      ? ("cancelled" as const)
+                      : runFinished
+                        ? ("completed" as const)
+                        : ("starting" as const),
+                  })
+                : candidate,
+            ),
+          )
+        : session.playbackRuns,
       pendingPlayback: null,
+      events:
+        run && (runCancelled || runFinished)
+          ? Object.freeze([
+              ...session.events,
+              evidenceEvent(
+                session,
+                revision,
+                runCancelled ? "playback_cancelled" : "playback_completed",
+                pending.comparisonId,
+                runCancelled ? "human" : "system",
+                run?.requestId ?? null,
+                run?.runId ?? null,
+              ),
+            ])
+          : session.events,
     });
+
+    if (
+      runFinished &&
+      run?.purpose === "no-difference-recovery" &&
+      !session.noDifferenceRecoveries.some(
+        (candidate) =>
+          candidate.comparisonId === pending.comparisonId &&
+          candidate.completedCount === 2,
+      )
+    ) {
+      const existing = session.noDifferenceRecoveries.find(
+        (candidate) => candidate.comparisonId === pending.comparisonId,
+      );
+      session = Object.freeze({
+        ...session,
+        noDifferenceRecoveries: Object.freeze([
+          ...session.noDifferenceRecoveries.filter(
+            (candidate) => candidate.comparisonId !== pending.comparisonId,
+          ),
+          Object.freeze({
+            comparisonId: pending.comparisonId,
+            completedCount: existing ? (2 as const) : (1 as const),
+          }),
+        ]),
+      });
+    }
   }
 
   if (
@@ -1446,8 +1853,13 @@ function sessionAfterHumanTransition(
 function isWebMcpToolAction(action: ExperienceAction): boolean {
   return (
     action.type === "webmcp-session-staged" ||
-    action.type === "webmcp-comparison-prepared" ||
-    action.type === "webmcp-observation-recorded"
+    action.type === "webmcp-agent-profile-selected" ||
+    (action.type === "webmcp-comparison-prepared" &&
+      action.requestRecord !== null) ||
+    (action.type === "webmcp-observation-recorded" &&
+      action.requestRecord !== null) ||
+    action.type === "webmcp-agent-playback-reserved" ||
+    action.type === "webmcp-agent-playback-failed"
   );
 }
 

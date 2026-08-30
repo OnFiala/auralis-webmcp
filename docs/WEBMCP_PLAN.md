@@ -8,7 +8,7 @@ This document is the public product and delivery contract for that extension. It
 
 ## Product contract
 
-The V1 experience has one prepared family scene, three predefined synthetic profiles, two synchronized listening perspectives, and a bounded adaptive loop. It is illustrative and non-diagnostic. It does not require or accept a personal audiogram.
+The V1 experience has one prepared family scene, three predefined synthetic profiles, two synchronized listening perspectives, and a bounded adaptive loop. It is illustrative and non-diagnostic. It does not require or accept a personal audiogram. The active preset set is `auralis-synthetic-presets-v2`: each retained v1 fixture is shifted numerically by +10 dB HL, which draws the same curve 10 dB lower and drives the deterministic audio transformation from that exact versioned source.
 
 The golden path is:
 
@@ -16,11 +16,14 @@ The golden path is:
 2. The page clearly states that it is agent-ready, but the badge is explanatory and cannot activate agent mode.
 3. A compatible agent discovers the WebMCP tools.
 4. The first successful `stage_demo_session` call activates the full-surface Agent Reveal.
-5. The agent explains the available profiles and proposes the next bounded action.
-6. The person directs the experience by clicking, typing to the agent, or speaking to the agent.
-7. The person retains consent, profile confirmation, scene loading, volume acknowledgement, playback, observation, finish, reset, and stop authority.
-8. The agent adapts one variable at a time and explains why the next comparison is useful.
-9. The experience ends with attributable, minimized session evidence and a non-clinical summary.
+5. The person explicitly confirms the illustrative purpose and limitation.
+6. Auralis then exposes the same three unselected demo audiograms to the page and the agent. The person may choose by clicking or direct the agent by text or voice; either route performs one atomic profile selection in the same session.
+7. The validated family scene loads automatically after profile selection. Nothing plays.
+8. The loaded scene presents a visible human consent dialog for a comfortable headphone level. A separate, unchecked control may grant agent-started playback for this browser session.
+9. The volume confirmation atomically prepares the fixed baseline. Without the separate grant, playback remains click-only; with it, the agent may start only the bounded typed playback commands. Stop, reset, consent, physical-volume acknowledgement, and finish remain visible human authority.
+10. Auralis asks for observations in everyday language. The agent maps only the person's stated meaning to bounded fields; "no clear difference" triggers focused guidance and replay rather than fabricated evidence.
+11. The agent or person selects one exposed adaptation at a time, then may repeat the listen-observe loop.
+12. The experience ends with attributable, minimized session evidence and a non-clinical summary.
 
 Pure human browsing never activates Agent Reveal. WebMCP absence or failure never removes the normal human interface.
 
@@ -44,14 +47,19 @@ These are human-authority channels, not separate product states. The page shows 
 | Tool | Role | Side effect | Human boundary |
 |---|---|---|---|
 | `get_auralis_state` | Read the current semantic state, revision, available profiles, next tools, and active human gate. | None. | Cannot activate Agent Reveal. |
-| `stage_demo_session` | Select one predefined synthetic profile and stage the family-understanding session. | Yes. Sole Agent Reveal activation edge. | The first staging requires a pristine session. Before profile confirmation, one different-profile restage is allowed; staging never confirms the profile for the person. |
+| `stage_demo_session` | With `action: start`, activate an empty family-understanding session. After consent, with `action: select-profile`, choose exactly one approved synthetic profile. | Yes. Sole Agent Reveal activation edge and agent profile-selection command. | Start never preselects a profile. Consent remains human-only. Profile selection may be performed once by either the agent or the visible page control. |
 | `prepare_comparison` | Prepare the baseline or one adaptive comparison. | Yes. | Cannot load audio, start playback, or acknowledge listening. |
+| `play_listening_comparison` | After an explicit visible grant, reserve and start A, B, or the bounded eight-second A-then-B sequence for the current comparison. At most three agent runs may be reserved per comparison. | Yes. | Cannot grant itself authority, bypass Stop/reset, alter DSP, or count a stopped clip as heard. |
 | `record_user_observation` | Record the person's structured observation and choose the next bounded action. | Yes. | Requires the relevant human playback evidence first. |
 | `get_session_evidence` | Read minimized, attributable session evidence. | None. | Does not finish, export, or reset the session. |
 
+`allowedNextTools` is the sole authority for what can execute in the current phase. `capabilities.agenticActivationTool` is non-null only while the initial Agent Reveal activation is available. `capabilities.stageDemoSessionAction` independently disambiguates the shared tool as `start`, `select-profile`, or `null`; therefore a post-consent profile-selection state cannot falsely present a current profile-selection action as an activation capability.
+
+Every registered tool states the same control preference: when a matching entry exists in `allowedNextTools`, the agent should use that WebMCP operation before Computer Use. Computer Use is fallback-only for an explicitly approved visible human gate or when no matching WebMCP tool is available. This is a machine-readable behavioral contract, not a page-level prohibition: Auralis preserves normal accessible human controls and cannot disable a host agent's general browser capability.
+
 Inputs are narrow and validated. Mutations use request IDs and expected revisions. Stale revisions, reused requests with different payloads, invalid phases, invalid comparisons, and missing human actions fail explicitly.
 
-The implementation follows the official [OpenAI WebMCP guidance](https://learn.chatgpt.com/docs/webmcp): feature-detect browser support, reuse existing application logic and validation, describe side effects, return verifiable results, and preserve the normal interface for people and unsupported browsers.
+The implementation follows the official [OpenAI WebMCP guidance](https://learn.chatgpt.com/docs/webmcp): feature-detect browser support, reuse existing application logic and validation, describe side effects, return verifiable results, and preserve the normal interface for people and unsupported browsers. Page clicks update the shared semantic state and revision immediately. The current WebMCP surface does not expose a page-to-agent wake API, so a passive click becomes visible to the agent on its next state read or next typed/voice turn; Auralis does not simulate an autonomous agent response.
 
 ## State machine and human gates
 
@@ -59,7 +67,7 @@ The V1 semantic phases are:
 
 1. `awaiting_session_stage`
 2. `awaiting_consent`
-3. `awaiting_profile_confirmation`
+3. `awaiting_profile_selection`
 4. `awaiting_scene_load`
 5. `awaiting_volume_acknowledgement`
 6. `ready_for_baseline`
@@ -71,17 +79,13 @@ The V1 semantic phases are:
 12. `ready_for_summary`
 13. `complete`
 
-The seven human gates are:
+The three human gates are:
 
 - confirm consent;
-- confirm the synthetic profile;
-- load the prepared scene;
-- acknowledge a comfortable low volume;
-- listen to the baseline;
-- listen to the comparison;
+- acknowledge a comfortable physical listening level after automatic scene preparation;
 - finish the session.
 
-No WebMCP tool may cross these gates. Stop remains available to the person independently of the agent.
+No WebMCP tool may cross these gates. Selecting one of the three synthetic demo profiles is intentionally a shared action rather than a human gate: either the agent tool or the person's click may commit it once after consent. Scene preparation is an automatic technical transition with a failure-only Retry, not a normal user decision. Listening is a shared action only after the person explicitly grants agent playback; direct visible playback always remains available. Stop remains available to the person independently of the agent, and only natural clip completion produces heard evidence.
 
 ## Architecture
 
@@ -92,7 +96,9 @@ The relevant layers are:
 - `src/contracts/webmcp.ts`: public tool, state, input, output, error, evidence, and human-gate types;
 - `src/core/experience.ts`: the existing experience reducer and shared controller;
 - `src/core/webmcp.ts`: deterministic WebMCP transitions and projections;
+- `src/core/source.ts`: the canonical validated family-scene identity shared without coupling WebMCP to browser audio;
 - `src/browser/webmcp.ts`: feature-detected browser registration and schema conversion;
+- `src/browser/audio.ts`: verified playback runtime and bounded clip window;
 - `src/app/page.tsx`: React subscription and browser binding;
 - focused core and browser adapter tests.
 
@@ -117,6 +123,8 @@ The WebMCP extension adds:
 - one-variable adaptive comparisons;
 - minimized attributable evidence;
 - browser tool registration;
+- an explicit playback grant, idempotent playback-run custody, and guided A/B playback;
+- shared page/agent adaptation options and everyday-language observation guidance;
 - the structural Agent Reveal UI and agent-guided information architecture.
 
 ## Delivery phases
@@ -127,9 +135,9 @@ The WebMCP extension adds:
 | BUILD-2 | Feature-detected browser registration, shared commit gateway, and adapter tests. | Implemented; clean-clone adapter and registration tests passed. |
 | BUILD-3A | Structural Agent Reveal, visible human gates, current state, and next action. | Implemented at `6b18563373ef1279bc1639525e952b86b0dc18d2`; clean Linux build, mocked WebMCP host journey, reduced-motion, Stop, reset, smoke, and existing human journeys passed. Real external-agent and voice proof remain VERIFY work. |
 | VERIFY-1 | Automated real-browser WebMCP journey, human fallback, negative gates, accessibility, and failure paths. | Implemented and independently reviewed at `c08ddf3fa53ebe77d814fbe19f4a4025ea93daa9`; aggregate validation passed with six Chromium WebMCP journeys and zero model-route calls. |
-| VERIFY-0 | Native site-tool discovery and the intended typed and voice agent control in the supported desktop host. | Not started. Requires an exact public Preview and direct runtime evidence; mock-host tests do not satisfy this gate. |
-| DESIGN-1 | Three visual directions generated from verified final-state screenshots. | Not started. |
-| VISUAL-UPDATE | One selected complete visual system for human and agent-guided modes. | Not started. |
+| VERIFY-0 | Native site-tool discovery and the intended typed and voice agent control in the supported desktop host. | The prior V1 Preview was owner-verified for native discovery, typed and voice control, Agent Reveal, human gates, Stop, and playback state transitions. That evidence predates the local v1.1 onboarding contract and must be repeated on its exact published Preview. Audible output was not available in the ChatGPT Work VM and remains a separate physical-browser proof before release. |
+| DESIGN-1 | Three visual directions generated from verified final-state screenshots. | Complete. Three grounded ImageGen directions were produced from the canonical family scene and the existing human/agent references; direction 2, `Resonant Canvas`, is the selected DESIGN-LOCK. |
+| VISUAL-UPDATE | One selected complete visual system for human and agent-guided modes. | Agent-mode `Resonant Canvas` is a local uncommitted v1.3 candidate. Its onboarding repair moves profile selection after consent, adds compact source-driven audiogram plots, automatically prepares the family scene and baseline, adds explicit agent-playback custody, exposes repeated listen-observe-adapt loops, lowers the listening docks to reveal more of the scene, and compacts the first adaptation choice. Local desktop/mobile Design-QA and the complete aggregate acceptance pass are required again before owner review and commit. The human-mode visual update remains a later layer. |
 | RELEASE | Public history, public deployment, demo evidence, and submission package. | Not started. |
 
 BUILD-3A begins only after BUILD-1 and BUILD-2 are reconstructed, reviewed, tested, and published on the canonical public development branch.
@@ -144,6 +152,24 @@ Implementation uses CSS motion tokens and progressive enhancement. The same-docu
 
 Image generation is used only after the structural and functional states are verified. Generated images provide art direction and approved scene assets; they do not replace accessible controls, state, text, or evidence.
 
+The selected agent direction is `Resonant Canvas`: the family scene becomes the full agent-session surface, frozen macro progress moves to a vertical spine, canonical conditions remain visible, and human-gated playback stays in the foreground. The acoustic-focus derivative appears only during the two canonical listening phases and is recorded in the existing generated-media manifest. This visual projection does not create a second semantic state.
+
+## V1.3 pre-release contract migration
+
+This branch intentionally evolves the still-unreleased v1.2 candidate before public release. The migration is **BREAKING (pre-release, atomically migrated)**:
+
+| Consumer | V1.2 candidate | V1.3 migration |
+|---|---|---|
+| Current staging meaning | `agenticActivationTool` remained statically named even when `stage_demo_session` meant profile selection or was unavailable. | `allowedNextTools` remains authoritative; activation is phase-bound and `stageDemoSessionAction` declares `start`, `select-profile`, or `null`. |
+| Agent/browser control | Tool discovery did not state a shared fallback policy. | Every tool declares WebMCP-first and Computer Use fallback-only for a human gate or absence of a matching tool. |
+| Synthetic profile set | Unversioned active fixture values. | `auralis-synthetic-presets-v2` retains the v1 basis and applies an explicit +10 dB HL offset; confirmed identity, WebMCP projection, SVG plots, transform tests, and rollback evidence are version-bound. |
+| State evidence | Evidence v2 covered playback custody. | Evidence v3 and contract v1.3 keep strict schema versioning aligned with the capability and profile-set additions. |
+| Adaptation presentation | The first adaptation screen repeated the shell heading, agent action panel, detailed prose, and session table. | One shell heading plus three compact grounded choices; technical session details remain available in other phases but are not part of page 5. |
+
+The first playback invocation returns after the first leg has actually started with `replayed: false`; the page continues the bounded sequence and a repeated identical request reads current or final status without restarting audio.
+
+Before commit, the only safe rollback unit is the complete unstaged visual-and-flow candidate described in the canonical Rollback section below. A distinct v1.3-only revert boundary may be claimed only after an exact reviewed commit split. Contract, profile fixtures, reducer, browser adapter, UI, tests, and documentation must never be partially restored across versions.
+
 ## Validation
 
 Every public implementation candidate must be validated from a clean clone or clean isolated worktree.
@@ -156,7 +182,7 @@ npm run test:webmcp
 npm run check
 ```
 
-`npm run check` now includes the deterministic WebMCP unit and adapter suite plus the six-scenario Chromium WebMCP journey. `npm run test:webmcp` and `npm run test:webmcp:journey` remain available as narrower diagnostic commands.
+`npm run check` now includes the deterministic WebMCP unit and adapter suite plus the eight-scenario Chromium WebMCP journey. `npm run test:webmcp` and `npm run test:webmcp:journey` remain available as narrower diagnostic commands.
 
 Acceptance also requires:
 
@@ -199,7 +225,7 @@ Push, pull request, merge, production promotion, release tag, and hackathon subm
 
 ## Rollback
 
-Before public push, each candidate commit can be rejected without changing the public repository.
+Before public push, each candidate commit can be rejected without changing the public repository. Until the visual candidate is split into reviewed commits, the safe rollback unit is the complete unstaged visual-and-flow candidate; the overlapping changes in `page.tsx`, `tests/webmcp.spec.ts`, and this plan must not be partially discarded as if they were independent layers.
 
 After public push but before merge, correction uses an additive fix or an explicitly approved branch withdrawal. No force push is required for the intended flow.
 
@@ -213,8 +239,9 @@ The unchanged human journey is the product fallback if WebMCP registration or ag
 - The experience is illustrative and non-diagnostic.
 - Session evidence is minimized, attributable, and browser-ephemeral.
 - No credential or shared API key is committed or exposed to client JavaScript.
-- WebMCP tools do not start playback, cross consent, confirm a profile, finish, export, reset, or override Stop.
-- The current playback evidence proves that a mode started and stopped; before release it must either require meaningful completion/minimum duration or use a name that accurately reflects the measured event.
+- WebMCP tools do not cross consent, acknowledge physical volume, finish, export, reset, or override Stop. `play_listening_comparison` starts only a current bounded run after the separate human grant. After consent, `stage_demo_session` may select exactly one approved synthetic profile; the same choice is available through a human click.
+- Playback evidence distinguishes requested, started, completed, cancelled, and failed. Stop invalidates the active run and never marks a mode heard; only natural media completion does.
+- The page owns timed visible guidance during A-to-B playback. The current WebMCP host surface does not guarantee a timed agent message between the two legs; the tool returns canonical before/between/after guidance without pretending to wake the agent.
 - Browser support and real-agent voice behavior require dedicated runtime verification and must not be inferred from mock registration tests.
 
 ## Hackathon evidence

@@ -16,15 +16,19 @@ This feature branch adds the deterministic WebMCP foundation for an agent-guided
 
 The implemented foundation includes:
 
-- five narrow semantic tools for state, synthetic-profile staging, one-variable comparison preparation, structured observations, and minimized session evidence;
-- thirteen explicit phases and seven human-authority gates;
+- the strict `auralis-webmcp-v1.3` contract with six narrow semantic tools for state, synthetic-profile staging, one-variable comparison preparation, agent-authorized listening, structured observations, and minimized session evidence;
+- thirteen explicit phases and three human-authority gates;
 - stale-revision and request-replay protection;
 - feature-detected browser registration through the application's existing state and validation logic;
 - focused domain and browser-adapter tests.
 
-Pure human browsing remains on the human landing page. Agent Reveal can begin only through the first successful session-staging tool call. WebMCP tools cannot confirm consent or profile choice, load audio, acknowledge volume, start playback, finish, reset, export, or override Stop.
+Pure human browsing remains on the human landing page. Agent Reveal can begin only through `stage_demo_session` with `action: start`, which opens the session without a preselected profile. Consent remains human-only. After consent, the person may click one of three demo audiograms or direct the agent to call `stage_demo_session` with `action: select-profile`; both paths update the same revisioned session. The family scene then loads automatically and presents a visible human confirmation for a comfortable listening level plus a separate, unchecked agent-playback grant. That confirmation atomically prepares the fixed baseline, so the session cannot stall on an invisible agent action. With the separate grant, `play_listening_comparison` may start A, B, or the bounded A-then-B sequence; without it, playback remains click-only. Stop and reset remain visible human controls and a stopped clip never counts as heard.
 
-The structural Agent Reveal UI is implemented and clean-candidate verified. Real-agent and voice journeys, the final visual update, dependency remediation, and production promotion remain later verified phases. See [`docs/WEBMCP_PLAN.md`](docs/WEBMCP_PLAN.md) for the public delivery contract and current status.
+`allowedNextTools` is the sole current-executability authority. The capabilities projection reports `agenticActivationTool` only while initial activation is actually possible and separately reports the current `stageDemoSessionAction` as `start`, `select-profile`, or `null`. Tool descriptions instruct compatible agents to use a matching WebMCP tool before Computer Use. Computer Use remains a fallback for an explicitly approved visible human gate or when no matching WebMCP tool is available; the page cannot globally disable a host's normal browser controls while retaining accessible human controls.
+
+The active synthetic preset set is `auralis-synthetic-presets-v2`. It moves every approved threshold 10 dB HL lower on the displayed audiogram (numerically +10 dB HL) than the retained v1 fixture basis. The accessible SVG plots and deterministic audio transformation both read the same versioned source values, so the visuals and audible simulation cannot drift independently. Raw thresholds remain browser-memory-only and are not exposed in WebMCP state or evidence.
+
+The structural Agent Reveal UI and the selected `Resonant Canvas` agent-mode visual layer are implemented in the local candidate. Real-agent and voice journeys, the later human-mode visual update, dependency remediation, and production promotion remain separately verified phases. See [`docs/WEBMCP_PLAN.md`](docs/WEBMCP_PLAN.md) for the public delivery contract and current status.
 
 ## What the experience contains
 
@@ -32,7 +36,7 @@ The product has one guided journey:
 
 1. **Welcome** — introduces the comparison and recommends comfortable stereo headphones.
 2. **Profile** — offers three immutable illustrative profiles plus exact manual bilateral entry.
-3. **Scene** — loads and verifies the synthetic family scene, presents its transcript, and requires a low-volume acknowledgement.
+3. **Scene** — loads and verifies the synthetic family scene, presents its transcript, and requires a comfortable-listening-level acknowledgement.
 4. **Listening** — compares A, the source reference, with B, the current illustrative result.
 5. **Interventions** — compares television on/off and the important speaker at the original position or closer and in front.
 6. **Explanation** — keeps the deterministic result primary and optionally requests a grounded GPT-5.6 Terra explanation.
@@ -119,9 +123,9 @@ Check the bounded runtime health endpoint at [http://127.0.0.1:3000/api/health](
 | Concern | Canonical implementation | Runtime behavior |
 | --- | --- | --- |
 | Guided product state | `src/core/experience.ts` | `ExperienceState` is the single product-state authority; guards and invalidation are reducer-driven. |
-| Audiogram data | `src/core/profile.ts` | Three immutable predefined fixtures and one manual bilateral draft; browser-memory only. |
+| Audiogram data | `src/core/profile.ts` | Three immutable versioned predefined fixtures (`auralis-synthetic-presets-v2`) and one manual bilateral draft; browser-memory only. |
 | Deterministic processing | `src/core/transformation.ts` | Produces the bounded profile, support, television, and speaker-position plan. |
-| Browser audio | `src/browser/audio.ts` | Verifies the manifest and SHA-256 digests, decodes the four stems, renders A/B, and owns immediate Stop. |
+| Browser audio | `src/browser/audio.ts` | Verifies the manifest and SHA-256 digests, decodes the four stems, renders A/B, supports the bounded eight-second agent sequence, and owns immediate Stop. |
 | Scene package | `public/media/family-dinner/` | One approved 64-second synthetic scene with focused speech, overlapping speech, television, and kitchen/room stems. |
 | Optional model request | `src/app/api/model/route.ts`, `src/server/model.ts`, `src/server/openai.ts` | One explicit server request per user action, at most three attempts per browser session, no automatic retry. |
 | Runtime contracts | `src/contracts/runtime.ts` | Validates the sanitized request, structured response, grounding identities, field bounds, and Live/Degraded classification. |
@@ -132,7 +136,7 @@ Check the bounded runtime health endpoint at [http://127.0.0.1:3000/api/health](
 - Product state lives in browser memory and resets through the existing comparison reset action.
 - There is no account, database, analytics pipeline, or persistence service.
 - Raw audiogram thresholds are not sent to the model. The request contains a bounded, sanitized description of the confirmed deterministic result.
-- The model receives no tools and cannot alter support, interventions, playback, safety, or completion state.
+- The optional GPT explanation model receives no tools and cannot alter support, interventions, playback, safety, or completion state. WebMCP agent actions remain constrained by the separate typed browser contract.
 - Model responses use structured output, are grounded back to the current result, and are rendered as plain text.
 - The provider request uses `store: false`; the application route and browser client use no-store behavior.
 

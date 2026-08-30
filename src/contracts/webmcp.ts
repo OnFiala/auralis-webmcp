@@ -1,17 +1,19 @@
 import { z } from "zod";
 
-export const AURALIS_WEBMCP_CONTRACT_VERSION = "auralis-webmcp-v1" as const;
+export const AURALIS_WEBMCP_CONTRACT_VERSION = "auralis-webmcp-v1.3" as const;
 export const AURALIS_WEBMCP_EVIDENCE_SCHEMA_VERSION =
-  "auralis-webmcp-evidence-v1" as const;
+  "auralis-webmcp-evidence-v3" as const;
 export const AURALIS_WEBMCP_LIMITATION =
   "This synthetic comparison is illustrative, non-diagnostic, and not a substitute for a hearing assessment." as const;
 export const AURALIS_WEBMCP_MAX_REVISION = 2_147_483_647;
 export const AURALIS_WEBMCP_MAX_ADAPTATIONS = 2 as const;
+export const AURALIS_WEBMCP_MAX_PLAYBACK_RUNS_PER_COMPARISON = 3 as const;
 
 export const AURALIS_TOOL_NAMES = [
   "get_auralis_state",
   "stage_demo_session",
   "prepare_comparison",
+  "play_listening_comparison",
   "record_user_observation",
   "get_session_evidence",
 ] as const;
@@ -19,7 +21,7 @@ export const AURALIS_TOOL_NAMES = [
 export const AURALIS_WEBMCP_PHASES = [
   "awaiting_session_stage",
   "awaiting_consent",
-  "awaiting_profile_confirmation",
+  "awaiting_profile_selection",
   "awaiting_scene_load",
   "awaiting_volume_acknowledgement",
   "ready_for_baseline",
@@ -34,11 +36,7 @@ export const AURALIS_WEBMCP_PHASES = [
 
 export const HUMAN_GATE_KINDS = [
   "confirm_consent",
-  "confirm_profile",
-  "load_scene",
-  "acknowledge_low_volume",
-  "listen_baseline",
-  "listen_comparison",
+  "acknowledge_comfortable_volume",
   "finish_session",
 ] as const;
 
@@ -54,6 +52,8 @@ export const AURALIS_TOOL_ERROR_CODES = [
   "ONE_VARIABLE_REQUIRED",
   "NO_EFFECT",
   "PLAYBACK_REQUIRED",
+  "REPLAY_REQUIRED",
+  "PLAYBACK_LIMIT_REACHED",
   "SESSION_LIMIT_REACHED",
   "INTERNAL_ERROR",
 ] as const;
@@ -80,6 +80,15 @@ export const SPEAKER_POSITIONS = [
   "closer-in-front",
 ] as const;
 export const PLAYBACK_MODES = ["reference", "simulated"] as const;
+export const LISTENING_PLAYBACKS = [
+  "reference",
+  "simulated",
+  "reference-then-simulated",
+] as const;
+export const LISTENING_FOCUS_OPTIONS = [
+  "important-speaker",
+  "overall-scene",
+] as const;
 export const FOCUSED_SPEECH_VALUES = [
   "clear",
   "partial",
@@ -113,7 +122,11 @@ export const EVIDENCE_ACTIONS = [
   "scene_loaded",
   "volume_acknowledged",
   "comparison_prepared",
+  "playback_requested",
   "playback_started",
+  "playback_completed",
+  "playback_cancelled",
+  "playback_failed",
   "observation_recorded",
   "session_finished",
 ] as const;
@@ -129,13 +142,15 @@ export type AuralisSupportMode = (typeof SUPPORT_MODES)[number];
 export type TelevisionState = (typeof TELEVISION_STATES)[number];
 export type SpeakerPosition = (typeof SPEAKER_POSITIONS)[number];
 export type PlaybackMode = (typeof PLAYBACK_MODES)[number];
+export type ListeningPlayback = (typeof LISTENING_PLAYBACKS)[number];
+export type ListeningFocus = (typeof LISTENING_FOCUS_OPTIONS)[number];
 export type FocusedSpeech = (typeof FOCUSED_SPEECH_VALUES)[number];
 export type MaskingSource = (typeof MASKING_SOURCES)[number];
 export type RelativeResult = (typeof RELATIVE_RESULTS)[number];
 export type NextAction = (typeof NEXT_ACTIONS)[number];
 export type ControlChannel = (typeof CONTROL_CHANNELS)[number];
 export type EvidenceAction = (typeof EVIDENCE_ACTIONS)[number];
-export type SemanticActor = "human" | "agent";
+export type SemanticActor = "human" | "agent" | "system";
 export type AgenticPresentation = "human-landing" | "agent-guided";
 
 const requestIdSchema = z
@@ -154,13 +169,23 @@ const mutationFields = {
 } as const;
 
 export const emptyToolInputSchema = z.object({}).strict();
-export const stageDemoSessionInputSchema = z
-  .object({
-    ...mutationFields,
-    profileId: z.enum(PROFILE_IDS),
-    goal: z.literal("family-understanding"),
-  })
-  .strict();
+export const stageDemoSessionInputSchema = z.discriminatedUnion("action", [
+  z
+    .object({
+      ...mutationFields,
+      action: z.literal("start"),
+      goal: z.literal("family-understanding"),
+    })
+    .strict(),
+  z
+    .object({
+      ...mutationFields,
+      action: z.literal("select-profile"),
+      goal: z.literal("family-understanding"),
+      profileId: z.enum(PROFILE_IDS),
+    })
+    .strict(),
+]);
 
 const baselineComparisonInputSchema = z
   .object({
@@ -200,6 +225,15 @@ export const prepareComparisonInputSchema = z.union([
   speakerComparisonInputSchema,
 ]);
 
+export const playListeningComparisonInputSchema = z
+  .object({
+    ...mutationFields,
+    comparisonId: z.enum(COMPARISON_IDS),
+    playback: z.enum(LISTENING_PLAYBACKS),
+    focus: z.enum(LISTENING_FOCUS_OPTIONS),
+  })
+  .strict();
+
 export const recordUserObservationInputSchema = z
   .object({
     ...mutationFields,
@@ -229,6 +263,9 @@ export type StageDemoSessionInput = z.infer<
 >;
 export type PrepareComparisonInput = z.infer<
   typeof prepareComparisonInputSchema
+>;
+export type PlayListeningComparisonInput = z.infer<
+  typeof playListeningComparisonInputSchema
 >;
 export type RecordUserObservationInput = z.infer<
   typeof recordUserObservationInputSchema
@@ -269,11 +306,43 @@ export type ObservationProjection = Readonly<{
 
 export type ProfileProjection = Readonly<{
   profileId: ProfileId;
+  predefinedProfileSetVersion: string;
   displayName: string;
   classification: "synthetic-illustrative";
   everydayDescription: string;
   demonstrates: string;
   limitation: string;
+}>;
+
+export type AdaptationOptionProjection = Readonly<
+  | {
+      variable: "support_mode";
+      value: AuralisSupportMode;
+      label: string;
+      explanation: string;
+      listenFor: string;
+    }
+  | {
+      variable: "television_state";
+      value: TelevisionState;
+      label: string;
+      explanation: string;
+      listenFor: string;
+    }
+  | {
+      variable: "speaker_position";
+      value: SpeakerPosition;
+      label: string;
+      explanation: string;
+      listenFor: string;
+    }
+>;
+
+export type ListeningNarrationProjection = Readonly<{
+  now: string;
+  next: string | null;
+  after: string;
+  noDifferenceRecovery: string;
 }>;
 
 export type HumanGateProjection = Readonly<{
@@ -288,8 +357,12 @@ export type GetAuralisStateData = Readonly<{
     maxAdaptiveComparisons: 2;
     profileMode: "synthetic-predefined-only";
     agenticEntry: "agent-origin-only";
-    agenticActivationTool: "stage_demo_session";
-    audioControl: "human-authority";
+    agenticActivationTool: "stage_demo_session" | null;
+    stageDemoSessionAction: "start" | "select-profile" | null;
+    preferredAgentControl: "webmcp-first";
+    computerUseFallback: "human-gate-or-no-matching-tool";
+    predefinedProfileSetVersion: string;
+    audioControl: "agent-start-or-direct-human-stop";
     controlChannels: readonly ["direct", "typed-agent", "voice-agent"];
   }>;
   availableProfiles: readonly ProfileProjection[];
@@ -300,26 +373,62 @@ export type GetAuralisStateData = Readonly<{
     adaptationsUsed: 0 | 1 | 2;
     presentation: AgenticPresentation;
     stageCount: 0 | 1 | 2;
+    lastEvent: SessionEvidenceEvent | null;
   }>;
   currentComparison: ComparisonProjection | null;
+  availableAdaptations: readonly AdaptationOptionProjection[];
+  listeningGuidance: Readonly<{
+    playbackTool: "play_listening_comparison";
+    availablePlaybacks: readonly ListeningPlayback[];
+    focusOptions: readonly ListeningFocus[];
+    askForObservation: string;
+    translateEverydayLanguage: string;
+    noDifferenceRecovery: string;
+  }>;
   audio: Readonly<{
     sourceStatus: "idle" | "loading" | "ready" | "failed";
-    lowVolumeAcknowledged: boolean;
+    comfortableVolumeAcknowledged: boolean;
+    agentPlaybackGranted: boolean;
     playbackStatus: "stopped" | "playing" | "failed";
+    activeRun: Readonly<{
+      runId: string;
+      requestId: string;
+      comparisonId: ComparisonId;
+      playback: ListeningPlayback;
+      focus: ListeningFocus;
+      sequence: readonly PlaybackMode[];
+      completedModes: readonly PlaybackMode[];
+      status: "starting" | "started";
+    }> | null;
   }>;
   summaryReady: boolean;
   limitation: string;
 }>;
 
 export type StageDemoSessionData = Readonly<{
-  stagedProfile: ProfileProjection;
+  operation: "started" | "profile-selected";
+  stagedProfile: ProfileProjection | null;
   agenticPresentation: "active";
   pendingConsent: boolean;
-  pendingHumanConfirmation: true;
+  pendingProfileSelection: boolean;
 }>;
 
 export type PrepareComparisonData = Readonly<{
   comparison: ComparisonProjection;
+}>;
+
+export type PlayListeningComparisonData = Readonly<{
+  runId: string;
+  comparisonId: ComparisonId;
+  playback: ListeningPlayback;
+  sequence: readonly PlaybackMode[];
+  focus: ListeningFocus;
+  clipWindow: Readonly<{
+    startSeconds: 32.3;
+    durationSeconds: 8;
+  }>;
+  status: "starting" | "started" | "completed" | "cancelled" | "failed";
+  narration: ListeningNarrationProjection;
 }>;
 
 export type RecordUserObservationData = Readonly<{
@@ -334,6 +443,25 @@ export type SessionEvidenceEvent = Readonly<{
   action: EvidenceAction;
   requestId: string | null;
   comparisonId: ComparisonId | null;
+  runId: string | null;
+}>;
+
+export type PlaybackRunEvidenceProjection = Readonly<{
+  runId: string;
+  requestId: string;
+  comparisonId: ComparisonId;
+  playback: ListeningPlayback;
+  focus: ListeningFocus;
+  purpose: "initial-listening" | "no-difference-recovery";
+  completedModes: readonly PlaybackMode[];
+  status: "starting" | "started" | "completed" | "cancelled" | "failed";
+}>;
+
+export type NoDifferenceRecoveryProjection = Readonly<{
+  comparisonId: ComparisonId;
+  completedCount: 1 | 2;
+  playback: "reference-then-simulated";
+  focus: "important-speaker";
 }>;
 
 export type SessionEvidenceProjection = Readonly<{
@@ -344,6 +472,8 @@ export type SessionEvidenceProjection = Readonly<{
   profile: ProfileProjection | null;
   comparisons: readonly ComparisonProjection[];
   observations: readonly ObservationProjection[];
+  playbackRuns: readonly PlaybackRunEvidenceProjection[];
+  noDifferenceRecoveries: readonly NoDifferenceRecoveryProjection[];
   events: readonly SessionEvidenceEvent[];
   summaryReady: boolean;
   completionState: "active" | "ready_for_summary" | "complete";
@@ -397,6 +527,8 @@ const profileIdSchema = z.enum(PROFILE_IDS);
 const comparisonIdSchema = z.enum(COMPARISON_IDS);
 const observationIdSchema = z.enum(OBSERVATION_IDS);
 const playbackModeSchema = z.enum(PLAYBACK_MODES);
+const listeningPlaybackSchema = z.enum(LISTENING_PLAYBACKS);
+const listeningFocusSchema = z.enum(LISTENING_FOCUS_OPTIONS);
 const sessionIdSchema = z
   .string()
   .regex(
@@ -442,11 +574,56 @@ export const observationProjectionSchema = z
 export const profileProjectionSchema = z
   .object({
     profileId: profileIdSchema,
+    predefinedProfileSetVersion: z
+      .string()
+      .regex(/^auralis-synthetic-presets-v\d+$/),
     displayName: z.string().min(1),
     classification: z.literal("synthetic-illustrative"),
     everydayDescription: z.string().min(1),
     demonstrates: z.string().min(1),
     limitation: z.string().min(1),
+  })
+  .strict();
+
+export const adaptationOptionProjectionSchema = z.discriminatedUnion(
+  "variable",
+  [
+    z
+      .object({
+        variable: z.literal("support_mode"),
+        value: z.enum(SUPPORT_MODES),
+        label: z.string().min(1),
+        explanation: z.string().min(1),
+        listenFor: z.string().min(1),
+      })
+      .strict(),
+    z
+      .object({
+        variable: z.literal("television_state"),
+        value: z.enum(TELEVISION_STATES),
+        label: z.string().min(1),
+        explanation: z.string().min(1),
+        listenFor: z.string().min(1),
+      })
+      .strict(),
+    z
+      .object({
+        variable: z.literal("speaker_position"),
+        value: z.enum(SPEAKER_POSITIONS),
+        label: z.string().min(1),
+        explanation: z.string().min(1),
+        listenFor: z.string().min(1),
+      })
+      .strict(),
+  ],
+);
+
+export const listeningNarrationProjectionSchema = z
+  .object({
+    now: z.string().min(1),
+    next: z.string().min(1).nullable(),
+    after: z.string().min(1),
+    noDifferenceRecovery: z.string().min(1),
   })
   .strict();
 
@@ -459,6 +636,18 @@ export const humanGateProjectionSchema = z
   })
   .strict();
 
+export const sessionEvidenceEventSchema = z
+  .object({
+    sequence: z.number().int().positive(),
+    revision: expectedRevisionSchema,
+    actor: z.enum(["human", "agent", "system"]),
+    action: z.enum(EVIDENCE_ACTIONS),
+    requestId: requestIdSchema.nullable(),
+    comparisonId: comparisonIdSchema.nullable(),
+    runId: z.string().regex(/^playback-[0-9a-f-]{36}$/).nullable(),
+  })
+  .strict();
+
 export const getAuralisStateDataSchema = z
   .object({
     capabilities: z
@@ -466,8 +655,18 @@ export const getAuralisStateDataSchema = z
         maxAdaptiveComparisons: z.literal(2),
         profileMode: z.literal("synthetic-predefined-only"),
         agenticEntry: z.literal("agent-origin-only"),
-        agenticActivationTool: z.literal("stage_demo_session"),
-        audioControl: z.literal("human-authority"),
+        agenticActivationTool: z.literal("stage_demo_session").nullable(),
+        stageDemoSessionAction: z
+          .enum(["start", "select-profile"])
+          .nullable(),
+        preferredAgentControl: z.literal("webmcp-first"),
+        computerUseFallback: z.literal(
+          "human-gate-or-no-matching-tool",
+        ),
+        predefinedProfileSetVersion: z
+          .string()
+          .regex(/^auralis-synthetic-presets-v\d+$/),
+        audioControl: z.literal("agent-start-or-direct-human-stop"),
         controlChannels: z.tuple([
           z.literal("direct"),
           z.literal("typed-agent"),
@@ -484,14 +683,40 @@ export const getAuralisStateDataSchema = z
         adaptationsUsed: z.union([z.literal(0), z.literal(1), z.literal(2)]),
         presentation: z.enum(["human-landing", "agent-guided"]),
         stageCount: z.union([z.literal(0), z.literal(1), z.literal(2)]),
+        lastEvent: sessionEvidenceEventSchema.nullable(),
       })
       .strict(),
     currentComparison: comparisonProjectionSchema.nullable(),
+    availableAdaptations: z.array(adaptationOptionProjectionSchema).max(3),
+    listeningGuidance: z
+      .object({
+        playbackTool: z.literal("play_listening_comparison"),
+        availablePlaybacks: z.array(listeningPlaybackSchema).max(3),
+        focusOptions: z.array(listeningFocusSchema).length(2),
+        askForObservation: z.string().min(1),
+        translateEverydayLanguage: z.string().min(1),
+        noDifferenceRecovery: z.string().min(1),
+      })
+      .strict(),
     audio: z
       .object({
         sourceStatus: z.enum(["idle", "loading", "ready", "failed"]),
-        lowVolumeAcknowledged: z.boolean(),
+        comfortableVolumeAcknowledged: z.boolean(),
+        agentPlaybackGranted: z.boolean(),
         playbackStatus: z.enum(["stopped", "playing", "failed"]),
+        activeRun: z
+          .object({
+            runId: z.string().regex(/^playback-[0-9a-f-]{36}$/),
+            requestId: requestIdSchema,
+            comparisonId: comparisonIdSchema,
+            playback: listeningPlaybackSchema,
+            focus: listeningFocusSchema,
+            sequence: z.array(playbackModeSchema).min(1).max(2),
+            completedModes: z.array(playbackModeSchema).max(2),
+            status: z.enum(["starting", "started"]),
+          })
+          .strict()
+          .nullable(),
       })
       .strict(),
     summaryReady: z.boolean(),
@@ -501,15 +726,33 @@ export const getAuralisStateDataSchema = z
 
 export const stageDemoSessionDataSchema = z
   .object({
-    stagedProfile: profileProjectionSchema,
+    operation: z.enum(["started", "profile-selected"]),
+    stagedProfile: profileProjectionSchema.nullable(),
     agenticPresentation: z.literal("active"),
     pendingConsent: z.boolean(),
-    pendingHumanConfirmation: z.literal(true),
+    pendingProfileSelection: z.boolean(),
   })
   .strict();
 
 export const prepareComparisonDataSchema = z
   .object({ comparison: comparisonProjectionSchema })
+  .strict();
+export const playListeningComparisonDataSchema = z
+  .object({
+    runId: z.string().regex(/^playback-[0-9a-f-]{36}$/),
+    comparisonId: comparisonIdSchema,
+    playback: listeningPlaybackSchema,
+    sequence: z.array(playbackModeSchema).min(1).max(2),
+    focus: listeningFocusSchema,
+    clipWindow: z
+      .object({
+        startSeconds: z.literal(32.3),
+        durationSeconds: z.literal(8),
+      })
+      .strict(),
+    status: z.enum(["starting", "started", "completed", "cancelled", "failed"]),
+    narration: listeningNarrationProjectionSchema,
+  })
   .strict();
 export const recordUserObservationDataSchema = z
   .object({
@@ -518,16 +761,6 @@ export const recordUserObservationDataSchema = z
   })
   .strict();
 
-export const sessionEvidenceEventSchema = z
-  .object({
-    sequence: z.number().int().positive(),
-    revision: expectedRevisionSchema,
-    actor: z.enum(["human", "agent"]),
-    action: z.enum(EVIDENCE_ACTIONS),
-    requestId: requestIdSchema.nullable(),
-    comparisonId: comparisonIdSchema.nullable(),
-  })
-  .strict();
 export const sessionEvidenceProjectionSchema = z
   .object({
     schemaVersion: z.literal(AURALIS_WEBMCP_EVIDENCE_SCHEMA_VERSION),
@@ -537,7 +770,44 @@ export const sessionEvidenceProjectionSchema = z
     profile: profileProjectionSchema.nullable(),
     comparisons: z.array(comparisonProjectionSchema).max(3),
     observations: z.array(observationProjectionSchema).max(3),
-    events: z.array(sessionEvidenceEventSchema).max(17),
+    playbackRuns: z
+      .array(
+        z
+          .object({
+            runId: z.string().regex(/^playback-[0-9a-f-]{36}$/),
+            requestId: requestIdSchema,
+            comparisonId: comparisonIdSchema,
+            playback: listeningPlaybackSchema,
+            focus: listeningFocusSchema,
+            purpose: z.enum([
+              "initial-listening",
+              "no-difference-recovery",
+            ]),
+            completedModes: z.array(playbackModeSchema).max(2),
+            status: z.enum([
+              "starting",
+              "started",
+              "completed",
+              "cancelled",
+              "failed",
+            ]),
+          })
+          .strict(),
+      )
+      .max(9),
+    noDifferenceRecoveries: z
+      .array(
+        z
+          .object({
+            comparisonId: comparisonIdSchema,
+            completedCount: z.union([z.literal(1), z.literal(2)]),
+            playback: z.literal("reference-then-simulated"),
+            focus: z.literal("important-speaker"),
+          })
+          .strict(),
+      )
+      .max(3),
+    events: z.array(sessionEvidenceEventSchema).max(64),
     summaryReady: z.boolean(),
     completionState: z.enum(["active", "ready_for_summary", "complete"]),
     limitation: z.string().min(1),

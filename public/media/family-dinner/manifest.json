@@ -44,6 +44,38 @@
     "frameCount": 1536000,
     "focusSourceId": "source-family-mara"
   },
+  "visualAssets": [
+    {
+      "file": "../auralis-family-scene-agent-v1.webp",
+      "role": "agent-session listening-phase backdrop",
+      "sha256": "b0f43e5d520740abe5083c5727f847253e4fb14cf129898b91c528fef3753d99",
+      "pixelDimensions": {
+        "width": 1672,
+        "height": 941
+      },
+      "classification": "AI-generated derivative of an Auralis-owned synthetic visual asset",
+      "sourceFile": "../auralis-family-scene.png",
+      "sourceSha256": "e5dd0a424295022292aefa1b445c1ce9e8262dfd6aee5ae661833481489096b1",
+      "generatedAt": "2026-08-30",
+      "generation": {
+        "tool": "Codex built-in ImageGen",
+        "runtimeModelIdEvidence": "not exposed by the Codex task host",
+        "requestedEdit": "Preserve the family scene and add only a restrained teal acoustic focus around the important speaker.",
+        "postProcessing": "Converted from generated PNG to WebP without changing dimensions using cwebp 1.6.0 at quality 86; metadata removed."
+      },
+      "originAndRights": {
+        "thirdPartySource": "none added by this derivative",
+        "licenseBasis": "Auralis source asset plus OpenAI-generated output, subject to applicable OpenAI terms.",
+        "copyrightGuaranteed": false,
+        "uniquenessGuaranteed": false,
+        "ownerReviewRequired": true,
+        "ownerReviewCompleted": true,
+        "ownerReviewCompletedAt": "2026-08-30",
+        "aiDisclosureRequired": true,
+        "aiDisclosureLocation": "this generated-media manifest"
+      }
+    }
+  ],
   "manifestAuthoring": {
     "requestedModelRole": "GPT-5.6 Sol",
     "executionChannel": "primary Codex task under owner subscription",

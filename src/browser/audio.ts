@@ -18,9 +18,9 @@ import {
   type SpectralFilter,
   type SupportMode,
 } from "../core/transformation";
+import { FAMILY_DINNER_SOURCE_ID } from "../core/source";
 
-export const FAMILY_DINNER_SOURCE_ID =
-  "auralis-family-dinner-greenhouse:a6cb7016fa973cb52a1994454cacd880a4f5864ce0a32a8081a75aad36224aed";
+export { FAMILY_DINNER_SOURCE_ID } from "../core/source";
 
 const MANIFEST_URL = "/media/family-dinner/manifest.json";
 const APPROVED_FILES = [
@@ -69,6 +69,7 @@ type ActivePlayback = {
   ended: Promise<void>;
   resolveEnded: () => void;
   onEnded: () => void;
+  onStopped: () => void;
   onInterrupted: () => void;
 };
 
@@ -99,6 +100,11 @@ export type PlaybackEvidence = Readonly<{
   durationSeconds: number;
   sampleRate: number;
   frameCount: number;
+}>;
+
+export type PlaybackWindow = Readonly<{
+  startSeconds: number;
+  durationSeconds: number;
 }>;
 
 export class AudioPlaybackCancelledError extends Error {
@@ -365,6 +371,10 @@ export class BrowserAudioEngine {
     return this.sourceEvidence(this.loadedSource);
   }
 
+  async unlock(): Promise<void> {
+    await this.ensureRunningContext();
+  }
+
   async play(
     mode: ComparisonMode,
     supportMode: SupportMode,
@@ -372,7 +382,12 @@ export class BrowserAudioEngine {
     speakerPositionState: SpeakerPositionState,
     plan: ComparisonPlan,
     lowVolumeAcknowledged: boolean,
-    callbacks: Readonly<{ onEnded: () => void; onInterrupted: () => void }>,
+    callbacks: Readonly<{
+      onEnded: () => void;
+      onStopped?: () => void;
+      onInterrupted: () => void;
+    }>,
+    playbackWindow?: PlaybackWindow,
   ): Promise<PlaybackEvidence> {
     const previousActive = this.active;
 
@@ -427,6 +442,18 @@ export class BrowserAudioEngine {
       throw new AudioSafetyError("The audio runtime was interrupted before playback.");
     }
 
+    if (
+      playbackWindow &&
+      (!Number.isFinite(playbackWindow.startSeconds) ||
+        !Number.isFinite(playbackWindow.durationSeconds) ||
+        playbackWindow.startSeconds < 0 ||
+        playbackWindow.durationSeconds <= 0 ||
+        playbackWindow.startSeconds + playbackWindow.durationSeconds >
+          rendered.validation.durationSeconds)
+    ) {
+      throw new AudioSafetyError("The requested playback window is outside the approved source.");
+    }
+
     const source = context.createBufferSource();
     const gain = context.createGain();
     const now = context.currentTime;
@@ -457,6 +484,7 @@ export class BrowserAudioEngine {
       ended,
       resolveEnded,
       onEnded: callbacks.onEnded,
+      onStopped: callbacks.onStopped ?? (() => undefined),
       onInterrupted: callbacks.onInterrupted,
     };
 
@@ -475,11 +503,21 @@ export class BrowserAudioEngine {
 
       if (!active.stopping) {
         active.onEnded();
+      } else {
+        active.onStopped();
       }
     };
 
     this.active = active;
-    source.start(now);
+    if (playbackWindow) {
+      source.start(
+        now,
+        playbackWindow.startSeconds,
+        playbackWindow.durationSeconds,
+      );
+    } else {
+      source.start(now);
+    }
     gain.gain.linearRampToValueAtTime(
       1,
       now + AUDIO_SAFETY_POLICY.transitionRampMs / 1000,
@@ -524,6 +562,7 @@ export class BrowserAudioEngine {
       this.active = null;
       active.source.onended = null;
       this.emergencySilence(active);
+      active.onStopped();
     }
   }
 
