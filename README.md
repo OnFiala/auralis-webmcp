@@ -16,13 +16,15 @@ This feature branch adds the deterministic WebMCP foundation for an agent-guided
 
 The implemented foundation includes:
 
-- the strict `auralis-webmcp-v1.4` contract with six narrow semantic tools for state, synthetic-profile staging, one-variable comparison preparation, agent-authorized listening, structured observations, and minimized session evidence;
-- thirteen explicit phases and three human-authority gates;
+- the strict `auralis-webmcp-v1.5` contract with six narrow semantic tools for state, synthetic-profile staging, one-variable comparison preparation, agent-authorized listening, structured observations, and minimized session evidence;
+- twelve explicit phases and two human-authority gates;
 - stale-revision and request-replay protection;
 - feature-detected browser registration through the application's existing state and validation logic;
 - focused domain and browser-adapter tests.
 
 Pure human browsing remains on the human landing page. Agent Reveal can begin only through `stage_demo_session` with `action: start`, which opens the session without a preselected profile. Consent remains human-only. After consent, the person may click one of three demo audiograms or direct the agent to call `stage_demo_session` with `action: select-profile`; both paths update the same revisioned session. The family scene then loads automatically and presents a visible human confirmation for a comfortable listening level plus a separate, unchecked agent-playback grant. That confirmation atomically prepares the fixed baseline, so the session cannot stall on an invisible agent action. With the separate grant, `play_listening_comparison` may start A, B, or the bounded A-then-B sequence; without it, playback remains click-only. Stop and reset remain visible human controls and a stopped clip never counts as heard.
+
+The final valid observation atomically completes the session and opens one deterministic comparison summary. No separate finish gate or GPT request is required. The summary preserves minimized evidence, explains the synthetic limitation, offers a browser-only information download without personal data, and keeps the audiologist locator visibly disabled until a separately governed integration exists.
 
 `allowedNextTools` is the sole current-executability authority. The capabilities projection reports `agenticActivationTool` only while initial activation is actually possible and separately reports the current `stageDemoSessionAction` as `start`, `select-profile`, or `null`. Tool descriptions instruct compatible agents to use a matching WebMCP tool before Computer Use. Computer Use remains a fallback for an explicitly approved visible human gate or when no matching WebMCP tool is available; the page cannot globally disable a host's normal browser controls while retaining accessible human controls.
 

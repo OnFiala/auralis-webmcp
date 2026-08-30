@@ -15,7 +15,6 @@ import {
   confirmWebMcpListeningReadiness,
   deriveAuralisWebMcpPhase,
   deriveValidAdaptationOptions,
-  finishWebMcpSession,
   getAuralisState,
   getSessionEvidence,
   prepareComparison,
@@ -485,7 +484,7 @@ describe("Auralis WebMCP deterministic domain contract", () => {
     ]);
   });
 
-  it("projects only the three v1.3 human authority gates at their exact phases", () => {
+  it("projects only the two v1.5 human authority gates at their exact phases", () => {
     const controller = createExperienceController();
     expect(stage(controller).ok).toBe(true);
     expect(getAuralisState(controller)).toMatchObject({
@@ -574,7 +573,8 @@ describe("Auralis WebMCP deterministic domain contract", () => {
       }).ok,
     ).toBe(true);
     expect(getAuralisState(controller)).toMatchObject({
-      humanGate: { kind: "finish_session" },
+      phase: "complete",
+      humanGate: null,
     });
   });
 
@@ -1259,33 +1259,117 @@ describe("Auralis WebMCP deterministic domain contract", () => {
     });
     expect(summarized).toMatchObject({
       ok: true,
-      phase: "ready_for_summary",
-      humanGate: { kind: "finish_session" },
+      phase: "complete",
+      humanGate: null,
+      data: { nextPhase: "complete" },
     });
   });
 
-  it("finishes only through the visible human-authority action", () => {
+  it("atomically completes with a system-attributed terminal event", () => {
     const controller = baselineObservedController();
     expect(
       prepareAdaptation(controller, "support-adaptation", "support_mode", "bilateral").ok,
     ).toBe(true);
     play(controller, "simulated");
-    expect(
-      observe(controller, "observe-2", "comparison-2", {
-        relativeToPrevious: "better",
-        nextAction: "summarize",
-      }).ok,
-    ).toBe(true);
-    expect(finishWebMcpSession(controller)).toMatchObject({ ok: true, changed: true });
+    const before = controller.getSnapshot().webMcp.revision;
+    const result = observe(controller, "observe-2", "comparison-2", {
+      relativeToPrevious: "better",
+      nextAction: "summarize",
+    });
+    expect(result).toMatchObject({
+      ok: true,
+      phase: "complete",
+      data: { nextPhase: "complete" },
+    });
     expect(deriveAuralisWebMcpPhase(controller.getSnapshot())).toBe("complete");
+    expect(controller.getSnapshot().webMcp.revision).toBe(before + 1);
     expect(getAuralisState(controller)).toMatchObject({
       ok: true,
+      allowedNextTools: ["get_auralis_state", "get_session_evidence"],
+      humanGate: null,
       data: { summaryReady: true },
     });
-    expect(getSessionEvidence(controller)).toMatchObject({
+    const evidence = getSessionEvidence(controller);
+    expect(evidence).toMatchObject({
       ok: true,
       data: { evidence: { summaryReady: true, completionState: "complete" } },
     });
+    if (!evidence.ok || !evidence.data.evidence) {
+      throw new Error("Expected terminal evidence.");
+    }
+    expect(evidence.data.evidence.events.slice(-2)).toMatchObject([
+      {
+        action: "observation_recorded",
+        actor: "agent",
+        requestId: "observe-2",
+        comparisonId: "comparison-2",
+      },
+      {
+        action: "session_finished",
+        actor: "system",
+        requestId: "observe-2",
+        comparisonId: "comparison-2",
+      },
+    ]);
+    expect(evidence.data.evidence.events.at(-2)?.revision).toBe(
+      evidence.data.evidence.events.at(-1)?.revision,
+    );
+
+    const replay = recordUserObservation(controller, {
+      requestId: "observe-2",
+      expectedRevision: before,
+      comparisonId: "comparison-2",
+      focusedSpeech: "partial",
+      maskingSources: ["television"],
+      relativeToPrevious: "better",
+      nextAction: "summarize",
+    });
+    expect(replay).toMatchObject({ ok: true, replayed: true, phase: "complete" });
+    expect(controller.getSnapshot().webMcp.revision).toBe(before + 1);
+    expect(
+      controller
+        .getSnapshot()
+        .webMcp.session?.events.filter((event) => event.action === "session_finished"),
+    ).toHaveLength(1);
+  });
+
+  it("uses the same atomic terminal transition for a direct human observation", () => {
+    const controller = baselineObservedController();
+    expect(
+      prepareAdaptation(
+        controller,
+        "human-summary-adaptation",
+        "television_state",
+        "tv-off",
+      ).ok,
+    ).toBe(true);
+    play(controller, "simulated");
+    const before = controller.getSnapshot().webMcp.revision;
+
+    expect(
+      recordWebMcpHumanObservation(controller, {
+        focusedSpeech: "clear",
+        maskingSources: ["none"],
+        relativeToPrevious: "better",
+        nextAction: "summarize",
+      }),
+    ).toMatchObject({ ok: true, changed: true });
+    expect(deriveAuralisWebMcpPhase(controller.getSnapshot())).toBe("complete");
+    expect(controller.getSnapshot().webMcp.revision).toBe(before + 1);
+    expect(controller.getSnapshot().webMcp.session?.events.slice(-2)).toMatchObject([
+      {
+        actor: "human",
+        action: "observation_recorded",
+        requestId: null,
+        comparisonId: "comparison-2",
+      },
+      {
+        actor: "system",
+        action: "session_finished",
+        requestId: null,
+        comparisonId: "comparison-2",
+      },
+    ]);
   });
 
   it("projects minimized ordered evidence without raw audiogram or source identity", () => {

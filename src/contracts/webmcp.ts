@@ -1,8 +1,8 @@
 import { z } from "zod";
 
-export const AURALIS_WEBMCP_CONTRACT_VERSION = "auralis-webmcp-v1.4" as const;
+export const AURALIS_WEBMCP_CONTRACT_VERSION = "auralis-webmcp-v1.5" as const;
 export const AURALIS_WEBMCP_EVIDENCE_SCHEMA_VERSION =
-  "auralis-webmcp-evidence-v3" as const;
+  "auralis-webmcp-evidence-v4" as const;
 export const AURALIS_WEBMCP_LIMITATION =
   "This synthetic comparison is illustrative, non-diagnostic, and not a substitute for a hearing assessment." as const;
 export const AURALIS_WEBMCP_MAX_REVISION = 2_147_483_647;
@@ -30,14 +30,12 @@ export const AURALIS_WEBMCP_PHASES = [
   "ready_for_adaptation",
   "awaiting_comparison_listening",
   "awaiting_comparison_observation",
-  "ready_for_summary",
   "complete",
 ] as const;
 
 export const HUMAN_GATE_KINDS = [
   "confirm_consent",
   "acknowledge_comfortable_volume",
-  "finish_session",
 ] as const;
 
 export const AURALIS_TOOL_ERROR_CODES = [
@@ -476,7 +474,7 @@ export type SessionEvidenceProjection = Readonly<{
   noDifferenceRecoveries: readonly NoDifferenceRecoveryProjection[];
   events: readonly SessionEvidenceEvent[];
   summaryReady: boolean;
-  completionState: "active" | "ready_for_summary" | "complete";
+  completionState: "active" | "complete";
   limitation: string;
 }>;
 
@@ -809,7 +807,7 @@ export const sessionEvidenceProjectionSchema = z
       .max(3),
     events: z.array(sessionEvidenceEventSchema).max(64),
     summaryReady: z.boolean(),
-    completionState: z.enum(["active", "ready_for_summary", "complete"]),
+    completionState: z.enum(["active", "complete"]),
     limitation: z.string().min(1),
   })
   .strict();

@@ -30,7 +30,6 @@ const chapterForPhase: Record<AuralisWebMcpPhase, number> = {
   ready_for_adaptation: 2,
   awaiting_comparison_listening: 2,
   awaiting_comparison_observation: 2,
-  ready_for_summary: 3,
   complete: 3,
 };
 
@@ -103,17 +102,11 @@ const phaseCopy: Record<
     detail:
       "Share what became clearer, stayed the same, or became harder. The agent records only what you report.",
   },
-  ready_for_summary: {
-    eyebrow: "Human gate",
-    heading: "Review before finishing",
-    detail:
-      "The evidence is ready. Finish only when the summary matches the session you directed.",
-  },
   complete: {
     eyebrow: "Session complete",
-    heading: "The guided comparison is complete",
+    heading: "Your comparison summary",
     detail:
-      "The session evidence is minimized and browser-ephemeral. You can return to the human landing page at any time.",
+      "The final observation completed this browser-ephemeral session and its evidence.",
   },
 };
 
@@ -174,7 +167,6 @@ export type AgentSessionShellProps = Readonly<{
   stopAvailable: boolean;
   onStopImmediately: () => void;
   onConfirmConsent: () => void;
-  onFinishSession: () => void;
   onResetSession: () => void;
   children: ReactNode;
 }>;
@@ -189,7 +181,6 @@ export function AgentSessionShell({
   stopAvailable,
   onStopImmediately,
   onConfirmConsent,
-  onFinishSession,
   onResetSession,
   children,
 }: AgentSessionShellProps) {
@@ -221,12 +212,6 @@ export function AgentSessionShell({
         return (
           <button type="button" onClick={onConfirmConsent} disabled={controlsBusy}>
             I understand and consent
-          </button>
-        );
-      case "finish_session":
-        return (
-          <button type="button" onClick={onFinishSession} disabled={controlsBusy}>
-            Finish this session
           </button>
         );
       default:
@@ -311,14 +296,15 @@ export function AgentSessionShell({
           })}
         </ol>
 
-        <section
-          className="agent-next-action"
-          aria-labelledby="agent-next-action-heading"
-          aria-live="polite"
-          aria-atomic="true"
-          inert={volumeModalOpen ? true : undefined}
-          aria-hidden={volumeModalOpen ? true : undefined}
-        >
+        {phase === "complete" ? null : (
+          <section
+            className="agent-next-action"
+            aria-labelledby="agent-next-action-heading"
+            aria-live="polite"
+            aria-atomic="true"
+            inert={volumeModalOpen ? true : undefined}
+            aria-hidden={volumeModalOpen ? true : undefined}
+          >
           <div>
             <p className="agent-kicker">{copy.eyebrow}</p>
             <h1
@@ -380,11 +366,6 @@ export function AgentSessionShell({
                   .join(" · ")}
               </span>
             </div>
-          ) : phase === "complete" ? (
-            <div className="agent-staged-action" role="status">
-              <strong>No pending agent action</strong>
-              <span>The person can reset the experience below.</span>
-            </div>
           ) : (
             <div className="agent-staged-action" role="status">
               <strong>Waiting for your direction</strong>
@@ -394,9 +375,10 @@ export function AgentSessionShell({
               </span>
             </div>
           )}
-        </section>
+          </section>
+        )}
 
-        {current ? (
+        {current && phase !== "complete" ? (
           <div
             className="agent-scene-conditions"
             aria-label="Current listening conditions"
@@ -433,11 +415,12 @@ export function AgentSessionShell({
           </div>
         </div>
 
-        <details
-          className="agent-session-details"
-          inert={volumeModalOpen ? true : undefined}
-          aria-hidden={volumeModalOpen ? true : undefined}
-        >
+        {phase === "complete" ? null : (
+          <details
+            className="agent-session-details"
+            inert={volumeModalOpen ? true : undefined}
+            aria-hidden={volumeModalOpen ? true : undefined}
+          >
           <summary>
             <span>Session details</span>
             <small>State, conditions, and recent experiment history</small>
@@ -517,7 +500,8 @@ export function AgentSessionShell({
               )}
             </details>
           </aside>
-        </details>
+          </details>
+        )}
 
         <footer
           className="agent-session-footer"

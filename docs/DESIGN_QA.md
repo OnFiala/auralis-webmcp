@@ -1,9 +1,45 @@
 # Resonant Canvas listening-loop repair — design QA history
 
-This report preserves the local v1.2 and v1.3 visual-verification checkpoints
-that preceded the current v1.4 candidate. Current contract and acceptance status
+This report preserves the local visual-verification checkpoints that preceded
+and support the current v1.5 candidate. Current contract and acceptance status
 remain authoritative in `docs/WEBMCP_PLAN.md`; paths below identify reproducible
 local QA outputs, not committed publication artifacts.
+
+## V1.5 automatic terminal summary
+
+The final valid agent or direct-human observation now completes the session in
+the same revision and opens a single deterministic summary. The summary is not
+the human journey's optional GPT screen and makes no model request. It replaces
+the removed `ready_for_summary` / `finish_session` gate with one opaque,
+high-contrast surface containing:
+
+- the selected synthetic profile, A/B meaning, final conditions, and bounded
+  changes;
+- all structured observations and the ordered comparison path;
+- the hard illustrative/non-diagnostic limitation;
+- general next-step information, including urgent wording for sudden or rapidly
+  worsening hearing changes;
+- a browser-generated conversation guide that contains no session data and
+  creates no request;
+- a disabled audiologist-locator placeholder with no location, search, booking,
+  or external-provider integration.
+
+Reproducible capture:
+
+- desktop: `artifacts/design-qa/v15-final-summary-1280x720.png`;
+- mobile: `artifacts/design-qa/v15-final-summary-390x844.png`;
+- viewport: `1280 × 720` CSS pixels, full-page capture;
+- mobile viewport: `390 × 844` CSS pixels, full-page capture;
+- source build: local production build from the current working tree;
+- test entry: the primary mocked-host WebMCP journey in
+  `tests/webmcp.spec.ts` with `AURALIS_SUMMARY_QA_CAPTURE` set.
+
+The browser acceptance checks the summary's exact viewport centering, absence of
+horizontal overflow, opaque surface, WCAG AA heading contrast, missing finish
+and GPT actions, client-only download, disabled audiologist control, and final
+v4 evidence. The complete unchanged-byte `npm run check` passed with 45 core
+tests, 55 WebMCP unit/adapter tests, 12 model tests, a production build, one
+smoke journey, two preserved human journeys, and eight Chromium WebMCP journeys.
 
 ## Comparison target
 

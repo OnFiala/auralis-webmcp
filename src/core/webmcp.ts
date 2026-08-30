@@ -337,7 +337,6 @@ export function deriveAuralisWebMcpPhase(
   const session = state.webMcp.session;
   if (!session) return "awaiting_session_stage";
   if (session.completionState === "complete") return "complete";
-  if (session.completionState === "ready_for_summary") return "ready_for_summary";
   if (!session.consentConfirmed) return "awaiting_consent";
   if (!session.confirmedProfileId) return "awaiting_profile_selection";
   if (state.source.status !== "ready") return "awaiting_scene_load";
@@ -368,10 +367,6 @@ function humanGateForPhase(
     awaiting_volume_acknowledgement: [
       "acknowledge_comfortable_volume",
       "Wait until the human states that physical listening volume is comfortable. Do not use Computer Use preemptively; the person may use the visible acknowledgement directly or explicitly direct the agent by text or voice.",
-    ],
-    ready_for_summary: [
-      "finish_session",
-      "Present the recorded evidence and finish only after explicit human direction. Do not use Computer Use preemptively; the person may use the visible control directly or explicitly direct the agent by text or voice.",
     ],
   };
   const instruction = instructions[phase];
@@ -635,6 +630,20 @@ function humanEvent(
         runId,
       })
     : null;
+}
+
+function automaticCompletionEvent(
+  observationEvent: SessionEvidenceEvent,
+): SessionEvidenceEvent {
+  return Object.freeze({
+    sequence: observationEvent.sequence + 1,
+    revision: observationEvent.revision,
+    actor: "system" as const,
+    action: "session_finished" as const,
+    requestId: observationEvent.requestId,
+    comparisonId: observationEvent.comparisonId,
+    runId: null,
+  });
 }
 
 function executeMutation<I extends { requestId: string; expectedRevision: number }, T>(
@@ -1509,7 +1518,7 @@ type ObservationDecision =
   | Readonly<{
       ok: true;
       observation: ObservationProjection;
-      completionState: "active" | "ready_for_summary";
+      completionState: "active" | "complete";
       nextPhase: AuralisWebMcpPhase;
     }>
   | Readonly<{ ok: false; code: AuralisToolErrorCode }>;
@@ -1587,15 +1596,15 @@ function decideObservation(
     comparison.kind === "adaptation" &&
     (input.nextAction === "summarize" ||
       adaptationCount === AURALIS_WEBMCP_MAX_ADAPTATIONS)
-      ? ("ready_for_summary" as const)
+      ? ("complete" as const)
       : ("active" as const);
   return Object.freeze({
     ok: true,
     observation,
     completionState,
     nextPhase:
-      completionState === "ready_for_summary"
-        ? ("ready_for_summary" as const)
+      completionState === "complete"
+        ? ("complete" as const)
         : ("ready_for_adaptation" as const),
   });
 }
@@ -1662,17 +1671,22 @@ export function recordUserObservation(
         canonicalInput: canonical,
         data,
       });
+      const observationEvent = agentEvent(
+        session,
+        state.webMcp.revision + 1,
+        "observation_recorded",
+        input.requestId,
+        comparison.comparisonId,
+      );
       const next = experienceReducer(state, {
         type: "webmcp-observation-recorded",
         observation,
         requestRecord: record,
-        event: agentEvent(
-          session,
-          state.webMcp.revision + 1,
-          "observation_recorded",
-          input.requestId,
-          comparison.comparisonId,
-        ),
+        event: observationEvent,
+        completionEvent:
+          completionState === "complete"
+            ? automaticCompletionEvent(observationEvent)
+            : null,
         completionState,
       });
       return !committedToolState(state, next, input.requestId)
@@ -1718,6 +1732,10 @@ export function recordWebMcpHumanObservation(
           observation,
           requestRecord: null,
           event,
+          completionEvent:
+            completionState === "complete"
+              ? automaticCompletionEvent(event)
+              : null,
           completionState,
         }
       : null;
@@ -1765,15 +1783,6 @@ export function selectWebMcpProfile(
           event,
         }
       : null;
-  });
-}
-
-export function finishWebMcpSession(
-  controller: ExperienceController,
-): ExperienceCommitResult {
-  return commitHumanAction(controller, "ready_for_summary", (state) => {
-    const event = humanEvent(state, "session_finished");
-    return event ? { type: "webmcp-human-session-finished", event } : null;
   });
 }
 

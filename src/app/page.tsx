@@ -54,7 +54,6 @@ import {
   confirmWebMcpConsent,
   deriveValidAdaptationOptions,
   failWebMcpPlaybackRun,
-  finishWebMcpSession,
   getAuralisState,
   noDifferenceRecoveryCount,
   prepareWebMcpBaselineRecovery,
@@ -79,6 +78,7 @@ import {
   type ProfileEntryOption,
 } from "../core/profile";
 import { AgentSessionShell } from "./agent-session-shell";
+import { AgentFinalSummary } from "./agent-final-summary";
 
 type ActiveScreen =
   | "welcome"
@@ -1317,10 +1317,6 @@ export default function HomePage() {
 
   function selectAgentProfile(profileId: ProfileId) {
     selectWebMcpProfile(experienceController, profileId);
-  }
-
-  function finishAgentSession() {
-    finishWebMcpSession(experienceController);
   }
 
   function resetAgentSession() {
@@ -3236,8 +3232,6 @@ export default function HomePage() {
       case "awaiting_comparison_listening":
       case "awaiting_comparison_observation":
         return renderInterventionsScreen();
-      case "ready_for_summary":
-        return renderExplanationScreen();
       case "ready_for_baseline":
         return (
           <section className="agent-recovery-action" role="status">
@@ -3281,9 +3275,12 @@ export default function HomePage() {
           </section>
         );
       }
+      case "complete":
+        return experience.webMcp.session ? (
+          <AgentFinalSummary session={experience.webMcp.session} />
+        ) : null;
       case "awaiting_session_stage":
       case "awaiting_consent":
-      case "complete":
         return null;
     }
   }
@@ -3309,7 +3306,6 @@ export default function HomePage() {
         stopAvailable={isPlaying || isRendering || guidedTransitionActive}
         onStopImmediately={stopPlayback}
         onConfirmConsent={confirmAgentConsent}
-        onFinishSession={finishAgentSession}
         onResetSession={resetAgentSession}
       >
         {renderAgentSurface(agentState.phase)}

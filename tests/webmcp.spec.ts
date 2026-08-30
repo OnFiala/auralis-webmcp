@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+
 import { expect, test, type Page } from "@playwright/test";
 
 type ToolResult = Readonly<{
@@ -756,26 +758,49 @@ test("a staged WebMCP session preserves human gates and completes through browse
   });
   expect(adaptationObservation).toMatchObject({
     ok: true,
-    phase: "ready_for_summary",
-    humanGate: { kind: "finish_session" },
+    phase: "complete",
+    humanGate: null,
+    allowedNextTools: ["get_auralis_state", "get_session_evidence"],
     data: {
       observation: { comparisonId: "comparison-2", nextAction: "summarize" },
-      nextPhase: "ready_for_summary",
+      nextPhase: "complete",
     },
   });
-  await expect(page.getByRole("heading", { name: "Review before finishing" })).toBeFocused();
+  await expect(page.getByRole("heading", { name: "Your comparison summary" })).toBeFocused();
   await expect(
     page.getByRole("list", { name: "Agent-guided session progress" }).getByRole("listitem").nth(3),
   ).toHaveAttribute("aria-current", "step");
+  const finalSummary = page.getByTestId("agent-final-summary");
+  await expect(finalSummary).toHaveCount(1);
+  await expect(page.locator(".agent-human-gate")).toHaveCount(0);
+  await expect(page.locator(".agent-staged-action")).toHaveCount(0);
+  await expect(page.locator(".agent-session-details")).toHaveCount(0);
+  await expect(page.locator(".agent-visible-state")).toHaveCount(0);
+  await expect(page.locator(".agent-scene-conditions")).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: /Finish this session/i }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: /Generate explanation|Retry explanation/i }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByText("Optional GPT explanation", { exact: true }),
+  ).toHaveCount(0);
+  if (process.env.AURALIS_SUMMARY_QA_CAPTURE) {
+    await page.screenshot({
+      path: process.env.AURALIS_SUMMARY_QA_CAPTURE,
+      fullPage: true,
+    });
+  }
 
-  const evidenceBeforeFinish = await callTool(page, "get_session_evidence", {});
-  expect(evidenceBeforeFinish).toMatchObject({
+  const finalEvidence = await callTool(page, "get_session_evidence", {});
+  expect(finalEvidence).toMatchObject({
     ok: true,
-    phase: "ready_for_summary",
+    phase: "complete",
     data: {
       evidence: {
-        schemaVersion: "auralis-webmcp-evidence-v3",
-        completionState: "ready_for_summary",
+        schemaVersion: "auralis-webmcp-evidence-v4",
+        completionState: "complete",
         summaryReady: true,
         comparisons: [
           { comparisonId: "comparison-1", observationId: "observation-1" },
@@ -813,11 +838,14 @@ test("a staged WebMCP session preserves human gates and completes through browse
     },
   });
   const playbackEvents = (
-    evidenceBeforeFinish.data?.evidence as {
+    finalEvidence.data?.evidence as {
       events: Array<{
         action: string;
+        actor: string;
         requestId: string | null;
+        comparisonId: string | null;
         runId: string | null;
+        revision: number;
       }>;
     }
   ).events.filter(
@@ -851,24 +879,111 @@ test("a staged WebMCP session preserves human gates and completes through browse
     expect(runEvents[0]?.runId).toMatch(/^playback-[0-9a-f-]{36}$/);
   }
 
-  await page.getByRole("button", { name: "Finish this session" }).click();
-  await expect(
-    page.getByRole("heading", { name: "The guided comparison is complete" }),
-  ).toBeFocused();
-  const finalEvidence = await callTool(page, "get_session_evidence", {});
-  expect(finalEvidence).toMatchObject({
-    ok: true,
-    phase: "complete",
-    data: {
-      evidence: {
-        schemaVersion: "auralis-webmcp-evidence-v3",
-        completionState: "complete",
-        summaryReady: true,
-        comparisons: [{ comparisonId: "comparison-1" }, { comparisonId: "comparison-2" }],
-        observations: [{ observationId: "observation-1" }, { observationId: "observation-2" }],
-      },
+  const terminalEvents = (
+    finalEvidence.data?.evidence as {
+      events: Array<{
+        action: string;
+        actor: string;
+        requestId: string | null;
+        comparisonId: string | null;
+        revision: number;
+      }>;
+    }
+  ).events.slice(-2);
+  expect(terminalEvents).toMatchObject([
+    {
+      action: "observation_recorded",
+      actor: "agent",
+      requestId: "verify-adaptation-observation",
+      comparisonId: "comparison-2",
     },
+    {
+      action: "session_finished",
+      actor: "system",
+      requestId: "verify-adaptation-observation",
+      comparisonId: "comparison-2",
+    },
+  ]);
+  expect(terminalEvents[0]?.revision).toBe(terminalEvents[1]?.revision);
+
+  const geometry = await finalSummary.evaluate((node) => {
+    const rect = node.getBoundingClientRect();
+    const hero = node.querySelector<HTMLElement>(".agent-final-summary-hero");
+    const heading = node.querySelector<HTMLElement>("#agent-final-summary-heading");
+    const parseRgb = (value: string) =>
+      value
+        .match(/[\d.]+/g)
+        ?.slice(0, 3)
+        .map(Number) ?? [];
+    const luminance = (value: string) => {
+      const channels = parseRgb(value).map((channel) => {
+        const normalized = channel / 255;
+        return normalized <= 0.04045
+          ? normalized / 12.92
+          : ((normalized + 0.055) / 1.055) ** 2.4;
+      });
+      return channels.length === 3
+        ? 0.2126 * channels[0]! + 0.7152 * channels[1]! + 0.0722 * channels[2]!
+        : 0;
+    };
+    const foreground = heading
+      ? getComputedStyle(heading).color
+      : "rgb(0, 0, 0)";
+    const background = hero
+      ? getComputedStyle(hero).backgroundColor
+      : "rgba(0, 0, 0, 0)";
+    const lighter = Math.max(luminance(foreground), luminance(background));
+    const darker = Math.min(luminance(foreground), luminance(background));
+    return {
+      center: rect.left + rect.width / 2,
+      width: rect.width,
+      viewportCenter: document.documentElement.clientWidth / 2,
+      scrollOverflow:
+        document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      background,
+      contrast: (lighter + 0.05) / (darker + 0.05),
+    };
   });
+  expect(Math.abs(geometry.center - geometry.viewportCenter)).toBeLessThanOrEqual(2);
+  expect(geometry.width).toBeLessThanOrEqual(1120);
+  expect(geometry.scrollOverflow).toBe(0);
+  expect(geometry.background).not.toBe("rgba(0, 0, 0, 0)");
+  expect(geometry.contrast).toBeGreaterThanOrEqual(4.5);
+
+  const downloadRequests: string[] = [];
+  page.on("request", (request) => downloadRequests.push(request.url()));
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download conversation guide" }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toBe(
+    "auralis-hearing-conversation-guide.txt",
+  );
+  const downloadPath = await download.path();
+  expect(downloadPath).not.toBeNull();
+  const downloadText = await readFile(downloadPath!, "utf8");
+  expect(downloadText).toContain(
+    "This guide is general information. It is not a diagnosis",
+  );
+  expect(downloadText).not.toContain("High-frequency hearing loss");
+  expect(downloadText).not.toContain("comparison-2");
+  expect(downloadText).not.toContain("observation-2");
+  expect(downloadText).not.toContain("dB HL");
+  expect(downloadRequests).toHaveLength(0);
+
+  const audiologistPlaceholder = page.getByRole("button", {
+    name: "Find an audiologist near you",
+  });
+  await expect(audiologistPlaceholder).toBeDisabled();
+  await expect(audiologistPlaceholder).toHaveAttribute(
+    "aria-describedby",
+    "audiologist-placeholder-note",
+  );
+  await expect(page.locator("#audiologist-placeholder-note")).toContainText(
+    "not connected to location services",
+  );
+  await expect(
+    page.getByRole("link", { name: /audiologist/i }),
+  ).toHaveCount(0);
   expect(modelCalls.count()).toBe(0);
 });
 

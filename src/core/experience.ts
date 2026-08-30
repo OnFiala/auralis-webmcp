@@ -181,7 +181,7 @@ export type WebMcpSessionState = Readonly<{
   pendingPlayback: WebMcpPendingPlayback | null;
   playbackRuns: readonly WebMcpPlaybackRun[];
   noDifferenceRecoveries: readonly WebMcpNoDifferenceRecovery[];
-  completionState: "active" | "ready_for_summary" | "complete";
+  completionState: "active" | "complete";
 }>;
 
 export type WebMcpExperienceSlice = Readonly<{
@@ -320,7 +320,8 @@ export type ExperienceAction =
       observation: ObservationProjection;
       requestRecord: WebMcpRequestRecord | null;
       event: SessionEvidenceEvent;
-      completionState: "active" | "ready_for_summary";
+      completionEvent: SessionEvidenceEvent | null;
+      completionState: "active" | "complete";
     }>
   | Readonly<{
       type: "webmcp-human-listening-readiness-confirmed";
@@ -348,10 +349,6 @@ export type ExperienceAction =
   | Readonly<{
       type: "webmcp-no-difference-recovery-completed";
       comparisonId: ComparisonProjection["comparisonId"];
-      event: SessionEvidenceEvent;
-    }>
-  | Readonly<{
-      type: "webmcp-human-session-finished";
       event: SessionEvidenceEvent;
     }>
   | Readonly<{ type: "webmcp-human-reset" }>
@@ -1308,7 +1305,11 @@ function reduceExperienceState(
               action.observation,
             ]),
             completionState: action.completionState,
-            events: Object.freeze([...session.events, action.event]),
+            events: Object.freeze([
+              ...session.events,
+              action.event,
+              ...(action.completionEvent ? [action.completionEvent] : []),
+            ]),
           }),
           requestRecords: action.requestRecord
             ? Object.freeze([
@@ -1504,26 +1505,6 @@ function reduceExperienceState(
               ),
               recovery,
             ]),
-            events: Object.freeze([...session.events, action.event]),
-          }),
-        }),
-        failure: null,
-      });
-    }
-
-    case "webmcp-human-session-finished": {
-      const session = state.webMcp.session;
-      if (!session || session.completionState !== "ready_for_summary") {
-        return rejectTransition(state, "invalid-transition");
-      }
-
-      return Object.freeze({
-        ...state,
-        webMcp: Object.freeze({
-          ...state.webMcp,
-          session: Object.freeze({
-            ...session,
-            completionState: "complete" as const,
             events: Object.freeze([...session.events, action.event]),
           }),
         }),
@@ -1831,20 +1812,6 @@ function sessionAfterHumanTransition(
         ]),
       });
     }
-  }
-
-  if (
-    action.type === "experience-completed" &&
-    session.completionState === "ready_for_summary"
-  ) {
-    session = Object.freeze({
-      ...session,
-      completionState: "complete" as const,
-      events: Object.freeze([
-        ...session.events,
-        evidenceEvent(session, revision, "session_finished"),
-      ]),
-    });
   }
 
   return session;

@@ -176,7 +176,7 @@ describe("Auralis WebMCP browser adapter", () => {
     binding.dispose();
   });
 
-  it("registers the exact six v1.4 names, metadata, schemas and annotations", () => {
+  it("registers the exact six v1.5 names, metadata, schemas and annotations", () => {
     const tools = createAuralisWebMcpTools(createExperienceController());
     const expected = {
       get_auralis_state: [

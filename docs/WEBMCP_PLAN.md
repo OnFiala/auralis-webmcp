@@ -20,10 +20,10 @@ The golden path is:
 6. Auralis then exposes the same three unselected demo audiograms to the page and the agent. The person may choose by clicking or direct the agent by text or voice; either route performs one atomic profile selection in the same session.
 7. The validated family scene loads automatically after profile selection. Nothing plays.
 8. The loaded scene presents a visible human consent dialog for a comfortable headphone level. A separate, unchecked control may grant agent-started playback for this browser session.
-9. The volume confirmation atomically prepares the fixed baseline. Without the separate grant, playback remains click-only; with it, the agent may start only the bounded typed playback commands. Stop, reset, consent, physical-volume acknowledgement, and finish remain visible human authority.
+9. The volume confirmation atomically prepares the fixed baseline. Without the separate grant, playback remains click-only; with it, the agent may start only the bounded typed playback commands. Stop, reset, consent, and physical-volume acknowledgement remain visible human authority.
 10. Auralis asks for observations in everyday language. The agent maps only the person's stated meaning to bounded fields; "no clear difference" triggers focused guidance and replay rather than fabricated evidence.
 11. The agent or person selects one exposed adaptation at a time, then may repeat the listen-observe loop.
-12. The experience ends with attributable, minimized session evidence and a non-clinical summary.
+12. The last valid observation atomically completes the experience and immediately opens one attributable, minimized, non-clinical summary. No separate finish action or GPT request is required.
 
 Pure human browsing never activates Agent Reveal. WebMCP absence or failure never removes the normal human interface.
 
@@ -76,16 +76,14 @@ The V1 semantic phases are:
 9. `ready_for_adaptation`
 10. `awaiting_comparison_listening`
 11. `awaiting_comparison_observation`
-12. `ready_for_summary`
-13. `complete`
+12. `complete`
 
-The three human gates are:
+The two human gates are:
 
 - confirm consent;
 - acknowledge a comfortable physical listening level after automatic scene preparation;
-- finish the session.
 
-No WebMCP tool may cross these gates. Selecting one of the three synthetic demo profiles is intentionally a shared action rather than a human gate: either the agent tool or the person's click may commit it once after consent. Scene preparation is an automatic technical transition with a failure-only Retry, not a normal user decision. Listening is a shared action only after the person explicitly grants agent playback; direct visible playback always remains available. Stop remains available to the person independently of the agent, and only natural clip completion produces heard evidence.
+No WebMCP tool may cross these gates. Selecting one of the three synthetic demo profiles is intentionally a shared action rather than a human gate: either the agent tool or the person's click may commit it once after consent. Scene preparation is an automatic technical transition with a failure-only Retry, not a normal user decision. Listening is a shared action only after the person explicitly grants agent playback; direct visible playback always remains available. Stop remains available to the person independently of the agent, and only natural clip completion produces heard evidence. The final observation and system-attributed `session_finished` event share one revision, so evidence is terminal without a second human or agent mutation.
 
 ## Architecture
 
@@ -125,7 +123,8 @@ The WebMCP extension adds:
 - browser tool registration;
 - an explicit playback grant, idempotent playback-run custody, and guided A/B playback;
 - shared page/agent adaptation options and everyday-language observation guidance;
-- the structural Agent Reveal UI and agent-guided information architecture.
+- the structural Agent Reveal UI and agent-guided information architecture;
+- a single deterministic terminal summary with general next-step guidance, a client-only information download, and a non-active audiologist placeholder.
 
 ## Delivery phases
 
@@ -239,7 +238,7 @@ Push, pull request, merge, production promotion, release tag, and hackathon subm
 
 ## Rollback
 
-Before public push, each candidate commit can be rejected without changing the public repository. Until the visual candidate is split into reviewed commits, the safe rollback unit is the complete unstaged visual-and-flow candidate; the overlapping changes in `page.tsx`, `tests/webmcp.spec.ts`, and this plan must not be partially discarded as if they were independent layers.
+Before the local v1.5 commit, reject the complete contract/reducer/summary/test/documentation diff without changing public history. After commit, revert the complete v1.5 commit. The coupled terminal phase, evidence schema, summary projection, acceptance tests, and documentation must never be rolled back independently.
 
 After public push but before merge, correction uses an additive fix or an explicitly approved branch withdrawal. No force push is required for the intended flow.
 
@@ -247,13 +246,23 @@ After merge, source rollback uses a reviewed Git revert. Deployment rollback sep
 
 The unchanged human journey is the product fallback if WebMCP registration or agent guidance is unavailable.
 
+### V1.5 pre-release migration
+
+| Surface | V1.4 | V1.5 | Compatibility consequence |
+|---|---|---|---|
+| Terminal phase | `ready_for_summary`, then `complete` | `complete` directly | Hosts must reload the v1.5 contract and must not wait for a finish gate. |
+| Terminal human gate | `finish_session` | Removed | The final valid observation is the last mutating authorization. |
+| Evidence | `auralis-webmcp-evidence-v3` | `auralis-webmcp-evidence-v4` | Consumers must validate v4 before reading new evidence. |
+| Revision count | Separate observation and finish revisions | One terminal observation revision | Consumers must not assume a fixed terminal revision number. |
+| Terminal event attribution | Human finish | System consequence of the final observation | `session_finished` shares request/comparison identity and revision with the final observation. |
+
 ## Privacy, safety, and known limits
 
 - Profiles are predefined and synthetic; V1 does not require a personal audiogram.
 - The experience is illustrative and non-diagnostic.
 - Session evidence is minimized, attributable, and browser-ephemeral.
 - No credential or shared API key is committed or exposed to client JavaScript.
-- WebMCP tools do not cross consent, acknowledge physical volume, finish, export, reset, or override Stop. `play_listening_comparison` starts only a current bounded run after the separate human grant. After consent, `stage_demo_session` may select exactly one approved synthetic profile; the same choice is available through a human click.
+- WebMCP tools do not cross consent, acknowledge physical volume, export, reset, or override Stop. `play_listening_comparison` starts only a current bounded run after the separate human grant. After consent, `stage_demo_session` may select exactly one approved synthetic profile; the same choice is available through a human click. The final valid `record_user_observation` may atomically complete the session and record one system-attributed terminal event without a second human or agent mutation.
 - Playback evidence distinguishes requested, started, completed, cancelled, and failed. Stop invalidates the active run and never marks a mode heard; only natural media completion does.
 - The page owns timed visible guidance during A-to-B playback. The current WebMCP host surface does not guarantee a timed agent message between the two legs; the tool returns canonical before/between/after guidance without pretending to wake the agent.
 - Browser support and real-agent voice behavior require dedicated runtime verification and must not be inferred from mock registration tests.
