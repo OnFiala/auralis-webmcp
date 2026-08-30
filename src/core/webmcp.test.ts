@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { AuralisToolResult, AuralisToolErrorCode } from "../contracts/webmcp";
 import {
@@ -9,6 +9,7 @@ import {
 } from "./experience";
 import { ACTIVE_PREDEFINED_PROFILE_SET_VERSION } from "./profile";
 import {
+  AURALIS_WEBMCP_WAIT_TIMEOUT_MS,
   cancelWebMcpPlaybackRun,
   completeWebMcpNoDifferenceRecovery,
   confirmWebMcpConsent,
@@ -25,6 +26,7 @@ import {
   resetWebMcpExperience,
   selectWebMcpProfile,
   stageDemoSession,
+  waitForSessionChange,
 } from "./webmcp";
 
 const SOURCE_IDENTITY =
@@ -325,7 +327,11 @@ describe("Auralis WebMCP deterministic domain contract", () => {
     });
     expect(getAuralisState(controller)).toMatchObject({
       ok: true,
-      allowedNextTools: ["get_auralis_state", "get_session_evidence"],
+      allowedNextTools: [
+        "get_auralis_state",
+        "get_session_evidence",
+        "wait_for_session_change",
+      ],
       data: {
         capabilities: {
           agenticActivationTool: null,
@@ -334,6 +340,303 @@ describe("Auralis WebMCP deterministic domain contract", () => {
         session: { presentation: "agent-guided", stageCount: 1 },
       },
     });
+  });
+
+  it("returns an already-observed revision immediately without subscribing", async () => {
+    const base = createExperienceController();
+    expect(stage(base).ok).toBe(true);
+    const subscribe = vi.fn(base.subscribe);
+    const controller: ExperienceController = Object.freeze({
+      getSnapshot: base.getSnapshot,
+      commit: base.commit,
+      subscribe,
+    });
+    const before = base.getSnapshot();
+
+    const result = await waitForSessionChange(controller, {
+      sessionId: SESSION_ID,
+      afterRevision: 0,
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      requestId: null,
+      revision: 1,
+      data: { reason: "changed" },
+    });
+    expect(subscribe).not.toHaveBeenCalled();
+    expect(base.getSnapshot()).toBe(before);
+  });
+
+  it("closes the missed-wakeup gap between the first read and subscription", async () => {
+    const base = createExperienceController();
+    expect(stage(base).ok).toBe(true);
+    let activeSubscriptions = 0;
+    let changedDuringSubscribe = false;
+    const controller: ExperienceController = Object.freeze({
+      getSnapshot: base.getSnapshot,
+      commit: base.commit,
+      subscribe: (listener) => {
+        activeSubscriptions += 1;
+        if (!changedDuringSubscribe) {
+          changedDuringSubscribe = true;
+          expect(confirmWebMcpConsent(base).changed).toBe(true);
+        }
+        const unsubscribe = base.subscribe(listener);
+        return () => {
+          activeSubscriptions -= 1;
+          unsubscribe();
+        };
+      },
+    });
+
+    const result = await waitForSessionChange(controller, {
+      sessionId: SESSION_ID,
+      afterRevision: 1,
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      revision: 2,
+      data: { reason: "changed" },
+    });
+    expect(activeSubscriptions).toBe(0);
+  });
+
+  it("times out without changing semantic state or evidence", async () => {
+    vi.useFakeTimers();
+    try {
+      const controller = createExperienceController();
+      expect(stage(controller).ok).toBe(true);
+      const before = controller.getSnapshot();
+      const pending = waitForSessionChange(
+        controller,
+        { sessionId: SESSION_ID, afterRevision: 1 },
+      );
+
+      await vi.advanceTimersByTimeAsync(AURALIS_WEBMCP_WAIT_TIMEOUT_MS);
+      const result = await pending;
+
+      expect(result).toMatchObject({
+        ok: true,
+        revision: 1,
+        data: { reason: "timeout" },
+      });
+      expect(controller.getSnapshot()).toBe(before);
+      expect(controller.getSnapshot().webMcp.requestRecords).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("returns the boundary revision instead of a false timeout", async () => {
+    vi.useFakeTimers();
+    try {
+      const base = createExperienceController();
+      expect(stage(base).ok).toBe(true);
+      let current = base.getSnapshot();
+      let activeSubscriptions = 0;
+      const controller: ExperienceController = Object.freeze({
+        getSnapshot: () => current,
+        commit: base.commit,
+        subscribe: () => {
+          activeSubscriptions += 1;
+          return () => {
+            activeSubscriptions -= 1;
+          };
+        },
+      });
+      const pending = waitForSessionChange(
+        controller,
+        { sessionId: SESSION_ID, afterRevision: 1 },
+      );
+
+      expect(confirmWebMcpConsent(base).changed).toBe(true);
+      current = base.getSnapshot();
+      await vi.advanceTimersByTimeAsync(AURALIS_WEBMCP_WAIT_TIMEOUT_MS);
+
+      await expect(pending).resolves.toMatchObject({
+        ok: true,
+        revision: 2,
+        data: { reason: "changed" },
+      });
+      expect(activeSubscriptions).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("rejects a pre-aborted wait without subscribing or mutating state", async () => {
+    const base = createExperienceController();
+    expect(stage(base).ok).toBe(true);
+    const subscribe = vi.fn(base.subscribe);
+    const controller: ExperienceController = Object.freeze({
+      getSnapshot: base.getSnapshot,
+      commit: base.commit,
+      subscribe,
+    });
+    const before = base.getSnapshot();
+    const beforeEvidence = getSessionEvidence(base);
+    const abort = new AbortController();
+    abort.abort();
+
+    const result = await waitForSessionChange(
+      controller,
+      { sessionId: SESSION_ID, afterRevision: 1 },
+      { signal: abort.signal },
+    );
+
+    expectError(result, "ABORTED");
+    expect(subscribe).not.toHaveBeenCalled();
+    expect(base.getSnapshot()).toBe(before);
+    expect(getSessionEvidence(base)).toEqual(beforeEvidence);
+  });
+
+  it("fails future revisions closed and resolves reset or replacement explicitly", async () => {
+    const controller = createExperienceController();
+    expect(stage(controller).ok).toBe(true);
+    expectError(
+      await waitForSessionChange(controller, {
+        sessionId: SESSION_ID,
+        afterRevision: 2,
+      }),
+      "INVALID_INPUT",
+    );
+
+    const pending = waitForSessionChange(controller, {
+      sessionId: SESSION_ID,
+      afterRevision: 1,
+    });
+    expect(resetWebMcpExperience(controller).changed).toBe(true);
+    await expect(pending).resolves.toMatchObject({
+      ok: true,
+      data: { reason: "session-replaced" },
+    });
+  });
+
+  it("resolves a pending wait when another session replaces the observed one", async () => {
+    const original = createExperienceController();
+    expect(stage(original).ok).toBe(true);
+    const replacement = createExperienceController();
+    expect(stage(replacement, "stage-replacement", () => NEXT_SESSION_ID).ok).toBe(
+      true,
+    );
+    let current = original.getSnapshot();
+    const listeners = new Set<(snapshot: typeof current) => void>();
+    const controller: ExperienceController = Object.freeze({
+      getSnapshot: () => current,
+      commit: original.commit,
+      subscribe: (nextListener) => {
+        listeners.add(nextListener);
+        return () => listeners.delete(nextListener);
+      },
+    });
+    const pending = waitForSessionChange(controller, {
+      sessionId: SESSION_ID,
+      afterRevision: 1,
+    });
+
+    current = replacement.getSnapshot();
+    for (const listener of listeners) listener(current);
+
+    await expect(pending).resolves.toMatchObject({
+      ok: true,
+      sessionId: NEXT_SESSION_ID,
+      data: { reason: "session-replaced" },
+    });
+    expect(listeners.size).toBe(0);
+  });
+
+  it("aborts and cleans up independent concurrent waiters", async () => {
+    const base = createExperienceController();
+    expect(stage(base).ok).toBe(true);
+    let activeSubscriptions = 0;
+    const controller: ExperienceController = Object.freeze({
+      getSnapshot: base.getSnapshot,
+      commit: base.commit,
+      subscribe: (listener) => {
+        activeSubscriptions += 1;
+        const unsubscribe = base.subscribe(listener);
+        return () => {
+          activeSubscriptions -= 1;
+          unsubscribe();
+        };
+      },
+    });
+    const aborted = new AbortController();
+    const first = waitForSessionChange(
+      controller,
+      { sessionId: SESSION_ID, afterRevision: 1 },
+      { signal: aborted.signal },
+    );
+    const second = waitForSessionChange(controller, {
+      sessionId: SESSION_ID,
+      afterRevision: 1,
+    });
+    const third = waitForSessionChange(controller, {
+      sessionId: SESSION_ID,
+      afterRevision: 1,
+    });
+    expect(activeSubscriptions).toBe(3);
+
+    aborted.abort();
+    await expect(first).resolves.toMatchObject({
+      ok: false,
+      error: { code: "ABORTED" },
+    });
+    expect(activeSubscriptions).toBe(2);
+    expect(confirmWebMcpConsent(base).changed).toBe(true);
+    const [secondResult, thirdResult] = await Promise.all([second, third]);
+    expect(secondResult).toMatchObject({
+      ok: true,
+      revision: 2,
+      data: { reason: "changed" },
+    });
+    expect(thirdResult).toEqual(secondResult);
+    expect(activeSubscriptions).toBe(0);
+  });
+
+  it("offers wait last throughout active progression and removes it at completion", () => {
+    const controller = readyController();
+    const expectWaitLast = () => {
+      const state = getAuralisState(controller);
+      expect(state.ok).toBe(true);
+      expect(state.allowedNextTools.at(-1)).toBe("wait_for_session_change");
+    };
+
+    expectWaitLast();
+    expect(prepareBaseline(controller, "wait-order-baseline").ok).toBe(true);
+    expectWaitLast();
+    play(controller, "reference");
+    expectWaitLast();
+    play(controller, "simulated");
+    expectWaitLast();
+    expect(observe(controller, "wait-order-observe-1", "comparison-1").ok).toBe(
+      true,
+    );
+    expectWaitLast();
+    expect(
+      prepareAdaptation(
+        controller,
+        "wait-order-adaptation",
+        "television_state",
+        "tv-off",
+      ).ok,
+    ).toBe(true);
+    expectWaitLast();
+    play(controller, "simulated");
+    expectWaitLast();
+    expect(
+      observe(controller, "wait-order-observe-2", "comparison-2", {
+        relativeToPrevious: "better",
+        nextAction: "summarize",
+      }).ok,
+    ).toBe(true);
+
+    expect(getAuralisState(controller).allowedNextTools).toEqual([
+      "get_auralis_state",
+      "get_session_evidence",
+    ]);
   });
 
   it("blocks staging after semantic human progress and preserves it", () => {
@@ -1262,6 +1565,37 @@ describe("Auralis WebMCP deterministic domain contract", () => {
       phase: "complete",
       humanGate: null,
       data: { nextPhase: "complete" },
+    });
+  });
+
+  it("resolves a pending wait as complete when the terminal observation commits", async () => {
+    const controller = baselineObservedController();
+    expect(
+      prepareAdaptation(
+        controller,
+        "wait-complete-adaptation",
+        "support_mode",
+        "bilateral",
+      ).ok,
+    ).toBe(true);
+    play(controller, "simulated");
+    const before = controller.getSnapshot();
+    const pending = waitForSessionChange(controller, {
+      sessionId: SESSION_ID,
+      afterRevision: before.webMcp.revision,
+    });
+
+    expect(
+      observe(controller, "wait-complete-observation", "comparison-2", {
+        relativeToPrevious: "better",
+        nextAction: "summarize",
+      }).ok,
+    ).toBe(true);
+
+    await expect(pending).resolves.toMatchObject({
+      ok: true,
+      phase: "complete",
+      data: { reason: "complete", state: { summaryReady: true } },
     });
   });
 

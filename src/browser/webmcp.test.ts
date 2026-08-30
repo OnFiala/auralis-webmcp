@@ -17,6 +17,8 @@ import {
   recordUserObservationInputSchema,
   stageDemoSessionDataSchema,
   stageDemoSessionInputSchema,
+  waitForSessionChangeDataSchema,
+  waitForSessionChangeInputSchema,
   type AuralisToolName,
   type AuralisToolResult,
   type GetAuralisStateData,
@@ -176,7 +178,7 @@ describe("Auralis WebMCP browser adapter", () => {
     binding.dispose();
   });
 
-  it("registers the exact six v1.5 names, metadata, schemas and annotations", () => {
+  it("registers the exact seven v1.6 names, metadata, schemas and annotations", () => {
     const tools = createAuralisWebMcpTools(createExperienceController());
     const expected = {
       get_auralis_state: [
@@ -215,10 +217,16 @@ describe("Auralis WebMCP browser adapter", () => {
         true,
         emptyToolInputSchema,
       ],
+      wait_for_session_change: [
+        "Wait for Auralis session change",
+        "Wait read-only for the current session revision to change after the agent has consciously handed a step to the person or expects a technical page transition. If a currently allowed action tool directly fulfills the person's instruction, use that tool instead of waiting. A timeout is not a state change and is never a reason to switch to Computer Use; read the returned state and wait again only when human or page progress is still expected.",
+        true,
+        waitForSessionChangeInputSchema,
+      ],
     } as const;
 
     expect(tools.map((tool) => tool.name)).toEqual(AURALIS_TOOL_NAMES);
-    expect(tools).toHaveLength(6);
+    expect(tools).toHaveLength(7);
     for (const tool of tools) {
       const [title, description, readOnly, inputSchema] = expected[tool.name];
       expect(tool.title).toBe(title);
@@ -254,7 +262,7 @@ describe("Auralis WebMCP browser adapter", () => {
     });
     await flushCleanup();
     expect(await strictModeRemount.status).toBe("registered");
-    expect(harness.registerTool).toHaveBeenCalledTimes(6);
+    expect(harness.registerTool).toHaveBeenCalledTimes(7);
     duplicate.dispose();
     strictModeRemount.dispose();
   });
@@ -266,7 +274,7 @@ describe("Auralis WebMCP browser adapter", () => {
       document: harness.host,
     });
     expect(await binding.status).toBe("registered");
-    expect(harness.signals).toHaveLength(6);
+    expect(harness.signals).toHaveLength(7);
     expect(new Set(harness.signals).size).toBe(1);
     expect(harness.signals[0]?.aborted).toBe(false);
 
@@ -301,7 +309,73 @@ describe("Auralis WebMCP browser adapter", () => {
     expect(controller.getSnapshot().webMcp.session).toBeNull();
   });
 
-  it("keeps both read-only handlers presentation- and revision-neutral", async () => {
+  it("maps an in-flight executor abort to ABORTED instead of INTERNAL_ERROR", async () => {
+    const controller = createExperienceController();
+    const abortController = new AbortController();
+    const tools = createAuralisWebMcpTools(controller, {
+      wait_for_session_change: (_controller, _input, options) =>
+        new Promise((_resolve, reject) => {
+          options.signal?.addEventListener(
+            "abort",
+            () => reject(new Error("host abort detail")),
+            { once: true },
+          );
+        }),
+    });
+    const pending = byName(tools, "wait_for_session_change").execute(
+      {
+        sessionId: "session-11111111-1111-4111-8111-111111111111",
+        afterRevision: 0,
+      },
+      { signal: abortController.signal },
+    );
+
+    abortController.abort();
+    const result = asResult(await pending);
+    expect(result).toMatchObject({
+      ok: false,
+      error: {
+        code: "ABORTED",
+        message: "The tool request was aborted before completion.",
+      },
+    });
+    expect(JSON.stringify(result)).not.toContain("host abort detail");
+  });
+
+  it("aborts an in-flight wait when the final registration binding is disposed", async () => {
+    const controller = createExperienceController();
+    const harness = hostHarness();
+    const binding = registerAuralisWebMcpTools({
+      controller,
+      document: harness.host,
+    });
+    expect(await binding.status).toBe("registered");
+    const stageTool = byName(harness.tools, "stage_demo_session");
+    expect(
+      asResult(
+        await stageTool.execute({
+          requestId: "dispose-stage",
+          expectedRevision: 0,
+          action: "start",
+          goal: "family-understanding",
+        }),
+      ).ok,
+    ).toBe(true);
+
+    const pending = byName(harness.tools, "wait_for_session_change").execute({
+      sessionId: controller.getSnapshot().webMcp.session?.sessionId,
+      afterRevision: controller.getSnapshot().webMcp.revision,
+    });
+    binding.dispose();
+    await flushCleanup();
+
+    await expect(pending).resolves.toMatchObject({
+      ok: false,
+      error: { code: "ABORTED" },
+    });
+  });
+
+  it("keeps all read-only handlers presentation- and revision-neutral", async () => {
     const controller = createExperienceController();
     const tools = createAuralisWebMcpTools(controller);
     const initial = controller.getSnapshot();
@@ -310,11 +384,22 @@ describe("Auralis WebMCP browser adapter", () => {
     const evidence = asResult(
       await byName(tools, "get_session_evidence").execute({}),
     );
+    const wait = asResult(
+      await byName(tools, "wait_for_session_change").execute({
+        sessionId: "session-11111111-1111-4111-8111-111111111111",
+        afterRevision: 0,
+      }),
+    );
     expect(state.ok).toBe(true);
     expect(evidence.ok).toBe(true);
+    expect(wait).toMatchObject({
+      ok: true,
+      data: { reason: "session-replaced" },
+    });
     expect(controller.getSnapshot()).toBe(initial);
     expect(state.revision).toBe(0);
     expect(evidence.revision).toBe(0);
+    expect(wait.revision).toBe(0);
   });
 
   it("routes staging to the pure core activation without a presentation setter", async () => {
@@ -374,6 +459,7 @@ describe("Auralis WebMCP browser adapter", () => {
       "playListeningComparison",
       "recordUserObservation",
       "getSessionEvidence",
+      "waitForSessionChange",
     ]) {
       expect(source).toContain(handler);
     }
@@ -427,6 +513,7 @@ describe("Auralis WebMCP browser adapter", () => {
       play_listening_comparison: playListeningComparisonDataSchema,
       record_user_observation: recordUserObservationDataSchema,
       get_session_evidence: getSessionEvidenceDataSchema,
+      wait_for_session_change: waitForSessionChangeDataSchema,
     };
 
     for (const tool of tools) {

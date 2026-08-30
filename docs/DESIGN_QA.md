@@ -1,9 +1,20 @@
 # Resonant Canvas listening-loop repair — design QA history
 
 This report preserves the local visual-verification checkpoints that preceded
-and support the current v1.5 candidate. Current contract and acceptance status
+and support the current v1.6 candidate. Current contract and acceptance status
 remain authoritative in `docs/WEBMCP_PLAN.md`; paths below identify reproducible
 local QA outputs, not committed publication artifacts.
+
+## V1.6 live-session continuity boundary
+
+V1.6 adds one read-only `wait_for_session_change` tool without changing the
+Resonant Canvas presentation, page controls, human gates, audio, observations,
+or evidence shape. The tool is intentionally not rendered as an available human
+action in the agent session shell. Focused browser QA covers a pending wait that
+resolves after the visible consent click and registration disposal that aborts
+an unresolved wait. Native one-prompt, typed, and voice continuity is not a
+visual or mocked-browser acceptance claim and remains a separate supported-host
+verification gate.
 
 ## V1.5 automatic terminal summary
 

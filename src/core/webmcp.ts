@@ -20,6 +20,8 @@ import {
   recordUserObservationInputSchema,
   stageDemoSessionDataSchema,
   stageDemoSessionInputSchema,
+  waitForSessionChangeDataSchema,
+  waitForSessionChangeInputSchema,
   type AuralisSettings,
   type AdaptationOptionProjection,
   type AuralisToolErrorCode,
@@ -45,6 +47,8 @@ import {
   type SessionEvidenceProjection,
   type StageDemoSessionData,
   type StageDemoSessionInput,
+  type WaitForSessionChangeData,
+  type WaitForSessionChangeInput,
 } from "../contracts/webmcp";
 import {
   comparisonResultIdentity,
@@ -69,6 +73,8 @@ const CONTROL_CHANNELS = Object.freeze([
   "typed-agent",
   "voice-agent",
 ] as const);
+
+export const AURALIS_WEBMCP_WAIT_TIMEOUT_MS = 15_000;
 
 const PROFILE_COPY: Readonly<
   Record<ProfileId, Readonly<{ everydayDescription: string; demonstrates: string }>>
@@ -117,12 +123,12 @@ const ERROR_DETAILS: Readonly<
   INVALID_INPUT: Object.freeze({
     message: "The tool input does not match the strict Auralis contract.",
     retryable: false,
-    recovery: "Correct the input and use a new requestId.",
+    recovery: "Correct the input and retry the tool if it is still needed.",
   }),
   ABORTED: Object.freeze({
-    message: "The request was aborted before the semantic commit.",
+    message: "The tool request was aborted before completion.",
     retryable: true,
-    recovery: "Read the current state, then retry with a new requestId.",
+    recovery: "Read the current state and retry if the tool is still needed.",
   }),
   STALE_REVISION: Object.freeze({
     message: "The expected revision is not the current document revision.",
@@ -422,6 +428,9 @@ function allowedNextToolsForState(
     phase === "awaiting_comparison_observation"
   ) {
     always.push("record_user_observation");
+  }
+  if (state.webMcp.session && phase !== "complete") {
+    always.push("wait_for_session_change");
   }
   return Object.freeze(always);
 }
@@ -849,6 +858,168 @@ export function getAuralisState(
     getAuralisStateDataSchema,
     result,
   );
+}
+
+type WaitSnapshotDecision =
+  | Readonly<{
+      kind: "success";
+      reason: WaitForSessionChangeData["reason"];
+    }>
+  | Readonly<{ kind: "error"; code: "INVALID_INPUT" }>
+  | null;
+
+function waitDecisionForSnapshot(
+  state: ExperienceState,
+  input: WaitForSessionChangeInput,
+): WaitSnapshotDecision {
+  const session = state.webMcp.session;
+  if (!session || session.sessionId !== input.sessionId) {
+    return Object.freeze({ kind: "success", reason: "session-replaced" });
+  }
+  if (input.afterRevision > state.webMcp.revision) {
+    return Object.freeze({ kind: "error", code: "INVALID_INPUT" });
+  }
+  if (session.completionState === "complete") {
+    return Object.freeze({ kind: "success", reason: "complete" });
+  }
+  if (state.webMcp.revision > input.afterRevision) {
+    return Object.freeze({ kind: "success", reason: "changed" });
+  }
+  return null;
+}
+
+function waitSuccess(
+  state: ExperienceState,
+  reason: WaitForSessionChangeData["reason"],
+): AuralisToolResult<WaitForSessionChangeData> {
+  const data = Object.freeze({
+    reason,
+    state: getStateData(state),
+  });
+  const result = successResult(
+    "wait_for_session_change",
+    null,
+    state,
+    data,
+  );
+  return validateResult(
+    "wait_for_session_change",
+    null,
+    state,
+    waitForSessionChangeDataSchema,
+    result,
+  );
+}
+
+export async function waitForSessionChange(
+  controller: ExperienceController,
+  rawInput: unknown,
+  options: ExecuteOptions = {},
+): Promise<AuralisToolResult<WaitForSessionChangeData>> {
+  const parsed = waitForSessionChangeInputSchema.safeParse(rawInput);
+  if (!parsed.success) {
+    return errorResult(
+      "wait_for_session_change",
+      null,
+      controller.getSnapshot(),
+      "INVALID_INPUT",
+    );
+  }
+  if (options.signal?.aborted) {
+    return errorResult(
+      "wait_for_session_change",
+      null,
+      controller.getSnapshot(),
+      "ABORTED",
+    );
+  }
+
+  const input = parsed.data;
+  const initial = controller.getSnapshot();
+  const initialDecision = waitDecisionForSnapshot(initial, input);
+  if (initialDecision?.kind === "error") {
+    return errorResult(
+      "wait_for_session_change",
+      null,
+      initial,
+      initialDecision.code,
+    );
+  }
+  if (initialDecision?.kind === "success") {
+    return waitSuccess(initial, initialDecision.reason);
+  }
+
+  return new Promise((resolve) => {
+    let settled = false;
+    let unsubscribe: (() => void) | null = null;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const signal = options.signal;
+
+    const onAbort = () => {
+      settle(
+        errorResult(
+          "wait_for_session_change",
+          null,
+          controller.getSnapshot(),
+          "ABORTED",
+        ),
+      );
+    };
+
+    const settle = (result: AuralisToolResult<WaitForSessionChangeData>) => {
+      if (settled) return;
+      settled = true;
+      unsubscribe?.();
+      unsubscribe = null;
+      if (timer !== null) {
+        clearTimeout(timer);
+        timer = null;
+      }
+      signal?.removeEventListener("abort", onAbort);
+      resolve(result);
+    };
+
+    const settleFromSnapshot = (state: ExperienceState): boolean => {
+      const decision = waitDecisionForSnapshot(state, input);
+      if (!decision) return false;
+      settle(
+        decision.kind === "error"
+          ? errorResult(
+              "wait_for_session_change",
+              null,
+              state,
+              decision.code,
+            )
+          : waitSuccess(state, decision.reason),
+      );
+      return true;
+    };
+
+    const subscription = controller.subscribe((state) => {
+      settleFromSnapshot(state);
+    });
+    unsubscribe = subscription;
+    if (settled) {
+      unsubscribe();
+      unsubscribe = null;
+      return;
+    }
+
+    if (settleFromSnapshot(controller.getSnapshot())) return;
+
+    signal?.addEventListener("abort", onAbort, { once: true });
+    if (signal?.aborted) {
+      onAbort();
+      return;
+    }
+
+    timer = setTimeout(() => {
+      const current = controller.getSnapshot();
+      if (!settleFromSnapshot(current)) {
+        settle(waitSuccess(current, "timeout"));
+      }
+    }, AURALIS_WEBMCP_WAIT_TIMEOUT_MS);
+  });
 }
 
 export function getSessionEvidence(

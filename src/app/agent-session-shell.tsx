@@ -139,6 +139,7 @@ const toolLabels: Record<AuralisToolName, string> = {
   play_listening_comparison: "Play A, B, or the guided A then B sequence",
   record_user_observation: "Record your stated observation",
   get_session_evidence: "Read session evidence",
+  wait_for_session_change: "Wait for session change",
 };
 
 const eventLabels = {
@@ -192,7 +193,10 @@ export function AgentSessionShell({
   );
   const copy = phaseCopy[phase];
   const mutatingNextTools = allowedNextTools.filter(
-    (tool) => tool !== "get_auralis_state" && tool !== "get_session_evidence",
+    (tool) =>
+      tool !== "get_auralis_state" &&
+      tool !== "get_session_evidence" &&
+      tool !== "wait_for_session_change",
   );
   const recentEvents = session.events.slice(-5).toReversed();
   const acousticFocusActive =

@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const AURALIS_WEBMCP_CONTRACT_VERSION = "auralis-webmcp-v1.5" as const;
+export const AURALIS_WEBMCP_CONTRACT_VERSION = "auralis-webmcp-v1.6" as const;
 export const AURALIS_WEBMCP_EVIDENCE_SCHEMA_VERSION =
   "auralis-webmcp-evidence-v4" as const;
 export const AURALIS_WEBMCP_LIMITATION =
@@ -16,6 +16,7 @@ export const AURALIS_TOOL_NAMES = [
   "play_listening_comparison",
   "record_user_observation",
   "get_session_evidence",
+  "wait_for_session_change",
 ] as const;
 
 export const AURALIS_WEBMCP_PHASES = [
@@ -161,12 +162,23 @@ const expectedRevisionSchema = z
   .int()
   .min(0)
   .max(AURALIS_WEBMCP_MAX_REVISION);
+const sessionIdSchema = z
+  .string()
+  .regex(
+    /^session-[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+  );
 const mutationFields = {
   requestId: requestIdSchema,
   expectedRevision: expectedRevisionSchema,
 } as const;
 
 export const emptyToolInputSchema = z.object({}).strict();
+export const waitForSessionChangeInputSchema = z
+  .object({
+    sessionId: sessionIdSchema,
+    afterRevision: expectedRevisionSchema,
+  })
+  .strict();
 export const stageDemoSessionInputSchema = z.discriminatedUnion("action", [
   z
     .object({
@@ -256,6 +268,9 @@ export const recordUserObservationInputSchema = z
   .strict();
 
 export type EmptyToolInput = z.infer<typeof emptyToolInputSchema>;
+export type WaitForSessionChangeInput = z.infer<
+  typeof waitForSessionChangeInputSchema
+>;
 export type StageDemoSessionInput = z.infer<
   typeof stageDemoSessionInputSchema
 >;
@@ -403,6 +418,11 @@ export type GetAuralisStateData = Readonly<{
   limitation: string;
 }>;
 
+export type WaitForSessionChangeData = Readonly<{
+  reason: "changed" | "timeout" | "session-replaced" | "complete";
+  state: GetAuralisStateData;
+}>;
+
 export type StageDemoSessionData = Readonly<{
   operation: "started" | "profile-selected";
   stagedProfile: ProfileProjection | null;
@@ -527,11 +547,6 @@ const observationIdSchema = z.enum(OBSERVATION_IDS);
 const playbackModeSchema = z.enum(PLAYBACK_MODES);
 const listeningPlaybackSchema = z.enum(LISTENING_PLAYBACKS);
 const listeningFocusSchema = z.enum(LISTENING_FOCUS_OPTIONS);
-const sessionIdSchema = z
-  .string()
-  .regex(
-    /^session-[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
-  );
 const settingsSchema = z
   .object({
     supportMode: z.enum(SUPPORT_MODES),
@@ -719,6 +734,13 @@ export const getAuralisStateDataSchema = z
       .strict(),
     summaryReady: z.boolean(),
     limitation: z.string().min(1),
+  })
+  .strict();
+
+export const waitForSessionChangeDataSchema = z
+  .object({
+    reason: z.enum(["changed", "timeout", "session-replaced", "complete"]),
+    state: getAuralisStateDataSchema,
   })
   .strict();
 

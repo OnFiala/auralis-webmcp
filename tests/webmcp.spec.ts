@@ -6,6 +6,7 @@ type ToolResult = Readonly<{
   ok: boolean;
   phase: string;
   revision: number;
+  sessionId?: string | null;
   allowedNextTools?: readonly string[];
   replayed?: boolean;
   data?: Record<string, unknown> | null;
@@ -46,7 +47,7 @@ async function openWithMockWebMcp(page: Page): Promise<void> {
         (globalThis as typeof globalThis & {
           __auralisWebMcpTools?: Record<string, unknown>;
         }).__auralisWebMcpTools ?? {},
-      ).length === 6,
+      ).length === 7,
   );
 }
 
@@ -210,6 +211,42 @@ test("registration and failed stage requests remain inert before the sole activa
   });
   await expectHumanLanding(page);
   expect(modelCalls.count()).toBe(0);
+});
+
+test("a pending read-only wait resolves when the person advances the visible consent gate", async ({ page }) => {
+  await openWithMockWebMcp(page);
+  const staged = await callTool(
+    page,
+    "stage_demo_session",
+    startInput("wait-stage", 0),
+  );
+  expect(staged).toMatchObject({
+    ok: true,
+    phase: "awaiting_consent",
+    revision: 1,
+    sessionId: expect.any(String),
+    allowedNextTools: expect.arrayContaining(["wait_for_session_change"]),
+  });
+
+  const pending = callTool(page, "wait_for_session_change", {
+    sessionId: staged.sessionId,
+    afterRevision: staged.revision,
+  });
+  await page.getByRole("button", { name: "I understand and consent" }).click();
+
+  await expect(pending).resolves.toMatchObject({
+    ok: true,
+    phase: "awaiting_profile_selection",
+    revision: 2,
+    data: {
+      reason: "changed",
+      state: {
+        session: {
+          lastEvent: { action: "consent_confirmed" },
+        },
+      },
+    },
+  });
 });
 
 test("a staged WebMCP session preserves human gates and completes through browser tools plus visible human controls", async ({ page }) => {

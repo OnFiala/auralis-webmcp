@@ -52,14 +52,15 @@ These are human-authority channels, not separate product states. The page shows 
 | `play_listening_comparison` | After an explicit visible grant, reserve and start A, B, or the bounded eight-second A-then-B sequence for the current comparison. At most three agent runs may be reserved per comparison. | Yes. | Cannot grant itself authority, bypass Stop/reset, alter DSP, or count a stopped clip as heard. |
 | `record_user_observation` | Record the person's structured observation and choose the next bounded action. | Yes. | Requires the relevant human playback evidence first. |
 | `get_session_evidence` | Read minimized, attributable session evidence. | None. | Does not finish, export, or reset the session. |
+| `wait_for_session_change` | Wait read-only for the bound session revision to advance, reset/replace, or complete. A same-revision wait returns after a fixed 15-second bound. | None. | Cannot create a session, cross a human gate, mutate evidence, start playback, or replace an already-authorized action tool. |
 
 `allowedNextTools` is the sole authority for what can execute in the current phase. `capabilities.agenticActivationTool` is non-null only while the initial Agent Reveal activation is available. `capabilities.stageDemoSessionAction` independently disambiguates the shared tool as `start`, `select-profile`, or `null`; therefore a post-consent profile-selection state cannot falsely present a current profile-selection action as an activation capability.
 
-Every registered tool states the same control preference: when a matching entry exists in `allowedNextTools`, the agent should use that WebMCP operation before Computer Use. Computer Use is fallback-only for an explicitly approved visible human gate or when no matching WebMCP tool is available. This is a machine-readable behavioral contract, not a page-level prohibition: Auralis preserves normal accessible human controls and cannot disable a host agent's general browser capability.
+Every registered tool states the same control preference: when a matching entry exists in `allowedNextTools`, the agent should use that WebMCP operation before Computer Use. Computer Use is fallback-only for an explicitly approved visible human gate or when no matching WebMCP tool is available. This is a machine-readable behavioral contract, not a page-level prohibition: Auralis preserves normal accessible human controls and cannot disable a host agent's general browser capability. `wait_for_session_change` is appended after all directly executable tools only while a session exists and is active. Its metadata requires the agent to use an available action tool when that tool already fulfills the person's instruction; timeout is not a state change and is not permission to switch to Computer Use.
 
 Inputs are narrow and validated. Mutations use request IDs and expected revisions. Stale revisions, reused requests with different payloads, invalid phases, invalid comparisons, and missing human actions fail explicitly.
 
-The implementation follows the official [OpenAI WebMCP guidance](https://learn.chatgpt.com/docs/webmcp): feature-detect browser support, reuse existing application logic and validation, describe side effects, return verifiable results, and preserve the normal interface for people and unsupported browsers. Page clicks update the shared semantic state and revision immediately. The current WebMCP surface does not expose a page-to-agent wake API, so a passive click becomes visible to the agent on its next state read or next typed/voice turn; Auralis does not simulate an autonomous agent response.
+The implementation follows the official [OpenAI WebMCP guidance](https://learn.chatgpt.com/docs/webmcp): feature-detect browser support, reuse existing application logic and validation, describe side effects, return verifiable results, and preserve the normal interface for people and unsupported browsers. Page clicks update the shared semantic state and revision immediately. WebMCP does not expose a general page-to-agent event subscription API, so Auralis V1.6 provides one bounded page tool that waits on the existing controller subscription without model polling. The tool returns only after a semantic revision, reset/replacement, completion, abort, or a fixed 15-second timeout. This can reduce prompt/tool round trips in a supported host, but continuous one-prompt behavior, typed steering during a pending call, and voice steering remain native-host acceptance claims rather than consequences inferred from browser mocks.
 
 ## State machine and human gates
 
@@ -87,7 +88,7 @@ No WebMCP tool may cross these gates. Selecting one of the three synthetic demo 
 
 ## Architecture
 
-`ExperienceState` is the single semantic source of truth. Human UI actions and WebMCP mutations enter one commit gateway. The browser adapter registers tools and delegates to typed domain operations; it does not automate DOM selectors or synthetic clicks.
+`ExperienceState` is the single semantic source of truth. Human UI actions and WebMCP mutations enter one commit gateway. The browser adapter registers tools and delegates to typed domain operations; it does not automate DOM selectors or synthetic clicks. `wait_for_session_change` is a thin asynchronous port over `ExperienceController.subscribe`; it creates no second state machine, scheduler, event log, persistence layer, or revision.
 
 The relevant layers are:
 
@@ -125,6 +126,7 @@ The WebMCP extension adds:
 - shared page/agent adaptation options and everyday-language observation guidance;
 - the structural Agent Reveal UI and agent-guided information architecture;
 - a single deterministic terminal summary with general next-step guidance, a client-only information download, and a non-active audiologist placeholder.
+- one session/revision-bound read-only wait primitive for human and automatic page progress, with bounded timeout, abort cleanup, and no semantic side effect.
 
 ## Delivery phases
 
@@ -137,6 +139,7 @@ The WebMCP extension adds:
 | VERIFY-0 | Native site-tool discovery and the intended typed and voice agent control in the supported desktop host. | The prior V1 Preview was owner-verified for native discovery, typed and voice control, Agent Reveal, human gates, Stop, and playback state transitions. That evidence predates the local v1.1 onboarding contract and must be repeated on its exact published Preview. Audible output was not available in the ChatGPT Work VM and remains a separate physical-browser proof before release. |
 | DESIGN-1 | Three visual directions generated from verified final-state screenshots. | Complete. Three grounded ImageGen directions were produced from the canonical family scene and the existing human/agent references; direction 2, `Resonant Canvas`, is the selected DESIGN-LOCK. |
 | VISUAL-UPDATE | One selected complete visual system for human and agent-guided modes. | Agent-mode `Resonant Canvas`, onboarding, compact audiograms, automatic scene/baseline preparation, explicit agent-playback custody, repeated listen-observe-adapt loops, and the responsive listening surfaces are versioned locally in `8711001`. The V1.4 broadband mix and four-option adaptation order are isolated in `6b93385`; the automatic terminal summary now uses the same dark agent surface without importing the human report layout. The candidates passed their complete aggregate acceptance commands before publication. Public push, renewed native/voice proof, and the later human-mode visual update remain separate gates. |
+| LIVE-SESSION V1.6 | Bounded event-driven continuation over the existing page session. | Local candidate adds `wait_for_session_change`, race-safe subscription cleanup, abort handling, and focused unit/adapter/browser coverage. Native one-prompt, typed, and voice continuity remain a separate VERIFY-0 gate. |
 | RELEASE | Public history, public deployment, demo evidence, and submission package. | Not started. |
 
 BUILD-3A begins only after BUILD-1 and BUILD-2 are reconstructed, reviewed, tested, and published on the canonical public development branch.
@@ -195,7 +198,7 @@ npm run test:webmcp
 npm run check
 ```
 
-`npm run check` now includes the deterministic WebMCP unit and adapter suite plus the eight-scenario Chromium WebMCP journey. `npm run test:webmcp` and `npm run test:webmcp:journey` remain available as narrower diagnostic commands.
+`npm run check` now includes the deterministic WebMCP unit and adapter suite plus the nine-scenario Chromium WebMCP journey. `npm run test:webmcp` and `npm run test:webmcp:journey` remain available as narrower diagnostic commands.
 
 Acceptance also requires:
 
@@ -240,6 +243,8 @@ Push, pull request, merge, production promotion, release tag, and hackathon subm
 
 Before the local v1.5 commit, reject the complete contract/reducer/summary/test/documentation diff without changing public history. After commit, revert the complete v1.5 commit. The coupled terminal phase, evidence schema, summary projection, acceptance tests, and documentation must never be rolled back independently.
 
+The V1.6 live-session increment is based on exact rollback commit `853c0259a73367f6a42bf32a33e8b91d318b5768`. Before its local commit, discard only the complete V1.6 allowlist. After commit, revert the one complete V1.6 contract/core/adapter/UI-type/test/documentation commit. Do not retain the V1.6 enum while reverting its exhaustive consumers, or revert the wait executor while leaving it registered.
+
 After public push but before merge, correction uses an additive fix or an explicitly approved branch withdrawal. No force push is required for the intended flow.
 
 After merge, source rollback uses a reviewed Git revert. Deployment rollback separately restores the bound previous known-good immutable deployment. A Git revert alone does not remove an already-created Preview artifact.
@@ -256,6 +261,18 @@ The unchanged human journey is the product fallback if WebMCP registration or ag
 | Revision count | Separate observation and finish revisions | One terminal observation revision | Consumers must not assume a fixed terminal revision number. |
 | Terminal event attribution | Human finish | System consequence of the final observation | `session_finished` shares request/comparison identity and revision with the final observation. |
 
+### V1.6 pre-release migration
+
+The migration verdict is **CONDITIONAL (pre-release, atomically migrated)**. Existing six-tool request and response data shapes are unchanged, but the contract literal and exhaustive tool-name enum gain one entry, so all in-repository consumers move in the same commit.
+
+| Surface | V1.5 | V1.6 | Compatibility consequence |
+|---|---|---|---|
+| Tool catalog | Six tools | Adds read-only `wait_for_session_change` | Additive for discovery, but exhaustive enum consumers must reload V1.6. |
+| Existing tool inputs and data | Frozen V1.5 shapes | Unchanged | Existing semantic calls retain their behavior. |
+| Session evidence | Evidence v4 with V1.5 contract literal | Same evidence-v4 structure with V1.6 contract literal | No row, backfill, or storage migration; strict consumers must accept the new contract literal. |
+| Session progression | Agent reads state on later calls/turns | Optional bounded revision wait over the same controller | No second scheduler or mutation path; timeout and abort are evidence-neutral. |
+| Rollback | `853c0259…` feature candidate | One atomic V1.6 commit | Revert the complete V1.6 commit; never partially roll back enum consumers. |
+
 ## Privacy, safety, and known limits
 
 - Profiles are predefined and synthetic; V1 does not require a personal audiogram.
@@ -265,6 +282,7 @@ The unchanged human journey is the product fallback if WebMCP registration or ag
 - WebMCP tools do not cross consent, acknowledge physical volume, export, reset, or override Stop. `play_listening_comparison` starts only a current bounded run after the separate human grant. After consent, `stage_demo_session` may select exactly one approved synthetic profile; the same choice is available through a human click. The final valid `record_user_observation` may atomically complete the session and record one system-attributed terminal event without a second human or agent mutation.
 - Playback evidence distinguishes requested, started, completed, cancelled, and failed. Stop invalidates the active run and never marks a mode heard; only natural media completion does.
 - The page owns timed visible guidance during A-to-B playback. The current WebMCP host surface does not guarantee a timed agent message between the two legs; the tool returns canonical before/between/after guidance without pretending to wake the agent.
+- `wait_for_session_change` is a bounded Promise-based tool call, not a WebSocket or guaranteed host subscription. Mock and Playwright coverage prove page-side semantics only; a native supported host must prove continued agent execution plus typed and voice steering while the wait is pending.
 - Browser support and real-agent voice behavior require dedicated runtime verification and must not be inferred from mock registration tests.
 
 ## Hackathon evidence

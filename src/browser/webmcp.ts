@@ -15,6 +15,8 @@ import {
   recordUserObservationInputSchema,
   stageDemoSessionDataSchema,
   stageDemoSessionInputSchema,
+  waitForSessionChangeDataSchema,
+  waitForSessionChangeInputSchema,
   type AuralisToolName,
   type AuralisToolResult,
   type PlayListeningComparisonData,
@@ -28,6 +30,7 @@ import {
   prepareComparison,
   recordUserObservation,
   stageDemoSession,
+  waitForSessionChange,
 } from "../core/webmcp";
 
 type ToolExecuteOptions = Readonly<{ signal?: AbortSignal }>;
@@ -141,6 +144,14 @@ const TOOL_METADATA: Readonly<Record<AuralisToolName, ToolMetadata>> =
       inputSchema: emptyToolInputSchema,
       dataSchema: getSessionEvidenceDataSchema,
     }),
+    wait_for_session_change: Object.freeze({
+      title: "Wait for Auralis session change",
+      description:
+        "Wait read-only for the current session revision to change after the agent has consciously handed a step to the person or expects a technical page transition. If a currently allowed action tool directly fulfills the person's instruction, use that tool instead of waiting. A timeout is not a state change and is never a reason to switch to Computer Use; read the returned state and wait again only when human or page progress is still expected.",
+      readOnly: true,
+      inputSchema: waitForSessionChangeInputSchema,
+      dataSchema: waitForSessionChangeDataSchema,
+    }),
   });
 
 const DEFAULT_EXECUTORS: Readonly<Record<AuralisToolName, ToolExecutor>> =
@@ -166,13 +177,15 @@ const DEFAULT_EXECUTORS: Readonly<Record<AuralisToolName, ToolExecutor>> =
       recordUserObservation(controller, input, options),
     get_session_evidence: (controller, input) =>
       getSessionEvidence(controller, input),
+    wait_for_session_change: (controller, input, options) =>
+      waitForSessionChange(controller, input, options),
   });
 
 const FAILURE_DETAILS = Object.freeze({
   ABORTED: Object.freeze({
-    message: "The request was aborted before the semantic commit.",
+    message: "The tool request was aborted before completion.",
     retryable: true,
-    recovery: "Read the current state, then retry with a new requestId.",
+    recovery: "Read the current state and retry if the tool is still needed.",
   }),
   INTERNAL_ERROR: Object.freeze({
     message: "The semantic command failed closed.",
@@ -209,9 +222,38 @@ function jsonSchema(schema: ZodType): Readonly<Record<string, unknown>> {
   );
 }
 
+function combineExecutionSignals(
+  executionSignal?: AbortSignal,
+  registrationSignal?: AbortSignal,
+): Readonly<{ signal?: AbortSignal; dispose(): void }> {
+  const signals = [...new Set([executionSignal, registrationSignal].filter(Boolean))] as AbortSignal[];
+  if (signals.length === 0) {
+    return Object.freeze({ signal: undefined, dispose: () => undefined });
+  }
+  if (signals.length === 1) {
+    return Object.freeze({ signal: signals[0], dispose: () => undefined });
+  }
+
+  const controller = new AbortController();
+  const onAbort = () => controller.abort();
+  for (const signal of signals) {
+    signal.addEventListener("abort", onAbort, { once: true });
+    if (signal.aborted) controller.abort();
+  }
+  return Object.freeze({
+    signal: controller.signal,
+    dispose: () => {
+      for (const signal of signals) {
+        signal.removeEventListener("abort", onAbort);
+      }
+    },
+  });
+}
+
 export function createAuralisWebMcpTools(
   controller: ExperienceController,
   executorOverrides: AuralisWebMcpExecutorOverrides = {},
+  registrationSignal?: AbortSignal,
 ): readonly AuralisWebMcpTool[] {
   const executors = Object.freeze({
     ...DEFAULT_EXECUTORS,
@@ -236,17 +278,30 @@ export function createAuralisWebMcpTools(
           input: unknown,
           options: ToolExecuteOptions = {},
         ): Promise<unknown> => {
-          if (options.signal?.aborted) {
+          const combined = combineExecutionSignals(
+            options.signal,
+            registrationSignal,
+          );
+          if (combined.signal?.aborted) {
+            combined.dispose();
             return safeFailure(name, controller, "ABORTED");
           }
 
           try {
-            const result = await executors[name](controller, input, options);
+            const result = await executors[name](controller, input, {
+              signal: combined.signal,
+            });
             return resultSchema.safeParse(result).success
               ? result
               : safeFailure(name, controller, "INTERNAL_ERROR");
           } catch {
-            return safeFailure(name, controller, "INTERNAL_ERROR");
+            return safeFailure(
+              name,
+              controller,
+              combined.signal?.aborted ? "ABORTED" : "INTERNAL_ERROR",
+            );
+          } finally {
+            combined.dispose();
           }
         },
       });
@@ -381,7 +436,7 @@ export function registerAuralisWebMcpTools(options: {
       };
       for (const tool of createAuralisWebMcpTools(options.controller, {
         play_listening_comparison: playbackExecutor,
-      })) {
+      }, abortController?.signal)) {
         if (abortController?.signal.aborted) return "rejected";
         await modelContext.registerTool(
           tool,

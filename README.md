@@ -16,7 +16,7 @@ This feature branch adds the deterministic WebMCP foundation for an agent-guided
 
 The implemented foundation includes:
 
-- the strict `auralis-webmcp-v1.5` contract with six narrow semantic tools for state, synthetic-profile staging, one-variable comparison preparation, agent-authorized listening, structured observations, and minimized session evidence;
+- the strict `auralis-webmcp-v1.6` contract with seven narrow semantic tools for state, synthetic-profile staging, one-variable comparison preparation, agent-authorized listening, structured observations, minimized session evidence, and bounded read-only waiting for a shared-session revision;
 - twelve explicit phases and two human-authority gates;
 - stale-revision and request-replay protection;
 - feature-detected browser registration through the application's existing state and validation logic;
@@ -27,6 +27,8 @@ Pure human browsing remains on the human landing page. Agent Reveal can begin on
 The final valid observation atomically completes the session and opens one deterministic comparison summary. No separate finish gate or GPT request is required. The summary preserves minimized evidence, explains the synthetic limitation, offers a browser-only information download without personal data, and keeps the audiologist locator visibly disabled until a separately governed integration exists.
 
 `allowedNextTools` is the sole current-executability authority. The capabilities projection reports `agenticActivationTool` only while initial activation is actually possible and separately reports the current `stageDemoSessionAction` as `start`, `select-profile`, or `null`. Tool descriptions instruct compatible agents to use a matching WebMCP tool before Computer Use. Computer Use remains a fallback for an explicitly approved visible human gate or when no matching WebMCP tool is available; the page cannot globally disable a host's normal browser controls while retaining accessible human controls.
+
+During an active, non-complete agent session, `wait_for_session_change` may hold one read-only call for at most 15 seconds after the agent has handed a visible step to the person or is waiting for an automatic page transition. A changed revision returns the same sanitized state projection as `get_auralis_state`; timeout, abort, reset/session replacement, and completion are explicit outcomes. Waiting never changes revision, evidence, playback, or human authority, and it is listed after any directly executable action tool so it cannot become a substitute for an already-authorized command. This is a bounded revision wait over the existing in-page controller, not a WebSocket, background service, or second state machine. Continuous one-prompt behavior remains subject to native supported-host verification.
 
 The active synthetic preset set is `auralis-synthetic-presets-v2`. It moves every approved threshold 10 dB HL lower on the displayed audiogram (numerically +10 dB HL) than the retained v1 fixture basis. The accessible SVG plots and deterministic audio transformation both read the same versioned source values, so the visuals and audible simulation cannot drift independently. Raw thresholds remain browser-memory-only and are not exposed in WebMCP state or evidence.
 
