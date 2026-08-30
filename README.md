@@ -30,7 +30,7 @@ The active synthetic preset set is `auralis-synthetic-presets-v2`. It moves ever
 
 The family mix uses the versioned `auralis-family-mix-v2` plan. While the television is on, its unchanged stem receives one bounded +6 dB broadband gain before the per-ear profile filters; the complete mix reserves a deterministic -1.5 dB headroom, and turning the television off removes that contribution completely. The adaptation choices are ordered from environmental to stronger illustrative support: TV off, speaker closer, left-ear support, then bilateral support. The session remains bounded to two adaptations.
 
-The structural Agent Reveal UI and the selected `Resonant Canvas` agent-mode visual layer are implemented in the local candidate. Real-agent and voice journeys, the later human-mode visual update, dependency remediation, and production promotion remain separately verified phases. See [`docs/WEBMCP_PLAN.md`](docs/WEBMCP_PLAN.md) for the public delivery contract and current status.
+The structural Agent Reveal UI and selected `Resonant Canvas` agent-mode visual layer are versioned locally in `8711001`, with the V1.4 television-masking and adaptation-order delta in `6b93385`. The public-safe design history is recorded in [`docs/DESIGN_QA.md`](docs/DESIGN_QA.md). Real-agent and voice journeys, the later human-mode visual update, dependency remediation, public push, and production promotion remain separately verified phases. See [`docs/WEBMCP_PLAN.md`](docs/WEBMCP_PLAN.md) for the public delivery contract and current status.
 
 ## What the experience contains
 

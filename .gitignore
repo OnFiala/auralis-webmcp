@@ -23,3 +23,6 @@ node_modules/
 .vercel/
 playwright-report/
 test-results/
+
+# Local Product Design QA screenshots are reproducible and remain untracked.
+/artifacts/design-qa/
