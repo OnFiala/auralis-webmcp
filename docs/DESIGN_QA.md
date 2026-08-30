@@ -175,4 +175,31 @@ The subsequent V1.4 checkpoint adds the fourth, left-ear support choice and the
 versioned television-masking mix without changing this historical visual target.
 Its exact clean-clone browser journey passed before local commit `6b93385`.
 
+## Agent terminal-summary visual repair — 2026-08-30
+
+Manual owner QA found that the new automatic terminal summary was functionally
+correct but visually projected as a light human-style report inside the agent
+session. The repair is presentation-only: the deterministic content, evidence
+projection, client-only download, disabled audiologist placeholder, terminal
+focus, and all WebMCP, consent, playback, and audio contracts are unchanged.
+
+The final summary now uses one centered Resonant Canvas surface over the family
+scene: deep green-black layers, teal hierarchy, white primary copy, narrative
+dividers, and an unboxed comparison/observation/path structure. The global
+human `section` card treatment is explicitly neutralized inside this component,
+so the result no longer reads as a stack of imported human-flow cards. Wide
+desktop facts and observations use the additional horizontal space; the 390 px
+layout returns every internal block to one column.
+
+The current automated browser run exercises the regular desktop, `2863 × 1514`,
+and `390 × 844` terminal states. Generated screenshots are local working aids,
+not retained release evidence; the committed acceptance authority is the
+deterministic geometry, contrast, behavior, and privacy assertion set below.
+
+The automated end-state assertion verifies focus, absence of the removed finish
+and GPT controls, evidence v4, a network-free static download, the disabled
+audiologist placeholder, centered geometry, zero horizontal overflow at regular
+desktop, `2863 × 1514`, and `390 × 844`, a dark non-transparent hero surface,
+and computed heading contrast of at least `4.5:1`.
+
 final result: passed

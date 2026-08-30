@@ -941,6 +941,7 @@ test("a staged WebMCP session preserves human gates and completes through browse
       scrollOverflow:
         document.documentElement.scrollWidth - document.documentElement.clientWidth,
       background,
+      backgroundLuminance: luminance(background),
       contrast: (lighter + 0.05) / (darker + 0.05),
     };
   });
@@ -948,6 +949,48 @@ test("a staged WebMCP session preserves human gates and completes through browse
   expect(geometry.width).toBeLessThanOrEqual(1120);
   expect(geometry.scrollOverflow).toBe(0);
   expect(geometry.background).not.toBe("rgba(0, 0, 0, 0)");
+  expect(geometry.backgroundLuminance).toBeLessThan(0.05);
+  expect(geometry.contrast).toBeGreaterThanOrEqual(4.5);
+
+  await page.setViewportSize({ width: 2863, height: 1514 });
+  const wideGeometry = await finalSummary.evaluate((node) => {
+    const rect = node.getBoundingClientRect();
+    return {
+      center: rect.left + rect.width / 2,
+      width: rect.width,
+      viewportCenter: document.documentElement.clientWidth / 2,
+      scrollOverflow:
+        document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    };
+  });
+  expect(Math.abs(wideGeometry.center - wideGeometry.viewportCenter)).toBeLessThanOrEqual(2);
+  expect(wideGeometry.width).toBeLessThanOrEqual(1472);
+  expect(wideGeometry.scrollOverflow).toBe(0);
+  if (process.env.AURALIS_SUMMARY_WIDE_QA_CAPTURE) {
+    await page.screenshot({
+      path: process.env.AURALIS_SUMMARY_WIDE_QA_CAPTURE,
+      fullPage: true,
+    });
+  }
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  const mobileGeometry = await finalSummary.evaluate((node) => {
+    const rect = node.getBoundingClientRect();
+    return {
+      center: rect.left + rect.width / 2,
+      viewportCenter: document.documentElement.clientWidth / 2,
+      scrollOverflow:
+        document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    };
+  });
+  expect(Math.abs(mobileGeometry.center - mobileGeometry.viewportCenter)).toBeLessThanOrEqual(2);
+  expect(mobileGeometry.scrollOverflow).toBe(0);
+  if (process.env.AURALIS_SUMMARY_MOBILE_QA_CAPTURE) {
+    await page.screenshot({
+      path: process.env.AURALIS_SUMMARY_MOBILE_QA_CAPTURE,
+      fullPage: true,
+    });
+  }
   expect(geometry.contrast).toBeGreaterThanOrEqual(4.5);
 
   const downloadRequests: string[] = [];
