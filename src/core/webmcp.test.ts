@@ -470,9 +470,10 @@ describe("Auralis WebMCP deterministic domain contract", () => {
     expect(activeSubscriptions).toBe(0);
   });
 
-  it("times out without changing semantic state or evidence", async () => {
+  it("waits the full 60-second bound without changing semantic state or evidence", async () => {
     vi.useFakeTimers();
     try {
+      expect(AURALIS_WEBMCP_WAIT_TIMEOUT_MS).toBe(60_000);
       const controller = createExperienceController();
       expect(stage(controller).ok).toBe(true);
       const before = controller.getSnapshot();
@@ -480,10 +481,17 @@ describe("Auralis WebMCP deterministic domain contract", () => {
         controller,
         { sessionId: SESSION_ID, afterRevision: 1 },
       );
+      let settled = false;
+      void pending.then(() => {
+        settled = true;
+      });
 
-      await vi.advanceTimersByTimeAsync(AURALIS_WEBMCP_WAIT_TIMEOUT_MS);
+      await vi.advanceTimersByTimeAsync(AURALIS_WEBMCP_WAIT_TIMEOUT_MS - 1);
+      expect(settled).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
       const result = await pending;
 
+      expect(settled).toBe(true);
       expect(result).toMatchObject({
         ok: true,
         revision: 1,

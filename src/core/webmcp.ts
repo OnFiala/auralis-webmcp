@@ -74,7 +74,7 @@ const CONTROL_CHANNELS = Object.freeze([
   "voice-agent",
 ] as const);
 
-export const AURALIS_WEBMCP_WAIT_TIMEOUT_MS = 15_000;
+export const AURALIS_WEBMCP_WAIT_TIMEOUT_MS = 60_000;
 
 const PROFILE_COPY: Readonly<
   Record<ProfileId, Readonly<{ everydayDescription: string; demonstrates: string }>>
