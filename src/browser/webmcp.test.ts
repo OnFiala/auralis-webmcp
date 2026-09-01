@@ -43,7 +43,7 @@ import {
 
 const source = readFileSync(new URL("./webmcp.ts", import.meta.url), "utf8");
 const EXPECTED_WEBMCP_FIRST_INSTRUCTION =
-  "Treat continuation as the current session-driver instruction. When continuation.doNotEndTurn is true, perform its narration and tool call in this same agent run before returning a final response. When a matching tool appears in allowedNextTools, use that WebMCP tool before Computer Use. Computer Use is fallback-only for an explicit visible human gate after approval, or when no matching WebMCP tool is allowed; never click to imitate an equivalent tool.";
+  "Treat continuation as the current session-driver instruction. When continuation.doNotEndTurn is true, perform its required tool call in this same agent run before returning a final response. Follow any explicit silence instruction before adding narration. When a matching tool appears in allowedNextTools, use that WebMCP tool before Computer Use. Computer Use is fallback-only for an explicit visible human gate after approval, or when no matching WebMCP tool is allowed; never click to imitate an equivalent tool.";
 
 function topLevelView() {
   const view: { top: unknown; self: unknown } = { top: null, self: null };
@@ -178,7 +178,7 @@ describe("Auralis WebMCP browser adapter", () => {
     binding.dispose();
   });
 
-  it("registers the exact seven v1.7 names, metadata, schemas and annotations", () => {
+  it("registers the exact seven v1.9 names, metadata, schemas and annotations", () => {
     const tools = createAuralisWebMcpTools(createExperienceController());
     const expected = {
       get_auralis_state: [
@@ -201,7 +201,7 @@ describe("Auralis WebMCP browser adapter", () => {
       ],
       play_listening_comparison: [
         "Play a listening comparison",
-        "After the person explicitly grants agent playback on the visible page, finish any explanation before calling this tool, then start A, B, or the bounded A-then-B eight-second comparison. Do not speak, write narration, or call another tool while this call remains pending; it returns only after the full sequence completes, fails, or the person stops it. The page owns timed on-screen guidance and the person can stop immediately. Natural media end is required before playback counts as heard.",
+        "After the person explicitly grants agent playback on the visible page, invoke this tool without a spoken or written preface. The page owns an eight-second quiet lead-in and timed on-screen guidance before starting A, B, or the bounded A-then-B comparison. Do not speak, write narration, or call another tool while this call remains pending; it returns only after the full sequence completes, fails, or the person stops it. During an observation phase, an explicit request to hear the source reference again should use playback reference before recording the observation. Natural media end is required before playback counts as heard.",
         false,
         playListeningComparisonInputSchema,
       ],

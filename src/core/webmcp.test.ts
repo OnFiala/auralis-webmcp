@@ -1140,6 +1140,38 @@ describe("Auralis WebMCP deterministic domain contract", () => {
       "record_user_observation",
       "wait_for_session_change",
     ]);
+    const replay = playListeningComparison(
+      agentPlayback,
+      {
+        requestId: "reference-replay-after-listening",
+        expectedRevision: agentPlayback.getSnapshot().webMcp.revision,
+        comparisonId: "comparison-1",
+        playback: "reference",
+        focus: "important-speaker",
+      },
+      {
+        createRunId: () =>
+          "playback-88888888-8888-4888-8888-888888888888",
+      },
+    );
+    expect(replay).toMatchObject({
+      ok: true,
+      phase: "awaiting_baseline_observation",
+      data: { sequence: ["reference"], status: "starting" },
+    });
+    completeRunLeg(
+      agentPlayback,
+      "reference",
+      "playback-88888888-8888-4888-8888-888888888888",
+    );
+    expect(getAuralisState(agentPlayback)).toMatchObject({
+      phase: "awaiting_baseline_observation",
+      data: {
+        currentComparison: {
+          heardPlaybackModes: ["reference", "simulated"],
+        },
+      },
+    });
     expect(
       observe(
         agentPlayback,
@@ -1160,6 +1192,80 @@ describe("Auralis WebMCP deterministic domain contract", () => {
         tool: "prepare_comparison",
       },
     });
+  });
+
+  it("keeps reference replay inside the three-run comparison limit", () => {
+    const controller = atomicListeningController(true);
+    const reserve = (
+      requestId: string,
+      playback: "reference" | "simulated" | "reference-then-simulated",
+      runId: string,
+    ) =>
+      playListeningComparison(
+        controller,
+        {
+          requestId,
+          expectedRevision: controller.getSnapshot().webMcp.revision,
+          comparisonId: "comparison-1",
+          playback,
+          focus: "important-speaker",
+        },
+        { createRunId: () => runId },
+      );
+
+    const initial = reserve(
+      "bounded-run-1",
+      "reference-then-simulated",
+      "playback-11111111-1111-4111-8111-111111111111",
+    );
+    expect(initial.ok).toBe(true);
+    completeRunLeg(
+      controller,
+      "reference",
+      "playback-11111111-1111-4111-8111-111111111111",
+    );
+    completeRunLeg(
+      controller,
+      "simulated",
+      "playback-11111111-1111-4111-8111-111111111111",
+    );
+
+    const replayA = reserve(
+      "bounded-run-2",
+      "reference",
+      "playback-22222222-2222-4222-8222-222222222222",
+    );
+    expect(replayA.ok).toBe(true);
+    completeRunLeg(
+      controller,
+      "reference",
+      "playback-22222222-2222-4222-8222-222222222222",
+    );
+
+    const third = reserve(
+      "bounded-run-3",
+      "simulated",
+      "playback-33333333-3333-4333-8333-333333333333",
+    );
+    expect(third.ok).toBe(true);
+    completeRunLeg(
+      controller,
+      "simulated",
+      "playback-33333333-3333-4333-8333-333333333333",
+    );
+
+    expectError(
+      reserve(
+        "bounded-run-4",
+        "reference",
+        "playback-44444444-4444-4444-8444-444444444444",
+      ),
+      "PLAYBACK_LIMIT_REACHED",
+    );
+    expect(controller.getSnapshot().webMcp.session?.playbackRuns).toHaveLength(3);
+    expect(deriveAuralisWebMcpPhase(controller.getSnapshot())).toBe(
+      "awaiting_baseline_observation",
+    );
   });
 
   it("blocks staging after semantic human progress and preserves it", () => {

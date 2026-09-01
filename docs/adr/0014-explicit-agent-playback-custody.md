@@ -1,6 +1,6 @@
 # ADR 0014: Explicit agent playback custody
 
-- **Status:** Accepted in v1.2; response timing amended by pre-release v1.8
+- **Status:** Accepted in v1.2; response timing amended by pre-release v1.8 and v1.9
 - **Date:** 2026-08-30
 - **Scope:** Agent-guided WebMCP listening only
 
@@ -14,7 +14,9 @@ The browser host does not provide a page-to-agent wake guarantee. Auralis theref
 
 Add `play_listening_comparison` as the sixth pre-release tool and require a separate visible, unchecked agent-playback grant during the comfortable-volume human gate. The acknowledgement and fixed baseline are one semantic commit. The tool reserves an idempotent `PlaybackRun` containing its request, comparison, sequence, focus, initiator, completed legs, and status.
 
-The browser page owns the verified audio runtime and timed visible guidance. A run may play A, B, or the fixed eight-second A-then-B sequence. At most three agent-started runs may be reserved per comparison. V1.2 through V1.7 returned the first invocation after the first leg started while the page continued the sequence. V1.8 intentionally keeps that tool call pending until the whole sequence completes, fails, or the person presses Stop. This prevents the host from starting a new narration turn during active audio. The agent receives canonical pre-listening, visible between-leg, post-listening, and no-difference guidance, but Auralis does not claim a timed agent callback.
+The browser page owns the verified audio runtime and timed visible guidance. A run may play A, B, or the fixed eight-second A-then-B sequence. At most three agent-started runs may be reserved per comparison. V1.2 through V1.7 returned the first invocation after the first leg started while the page continued the sequence. V1.8 intentionally keeps that tool call pending until the whole sequence completes, fails, or the person presses Stop. V1.9 additionally tells the host to invoke playback without a spoken or written preface and makes the page hold an eight-second quiet lead-in before starting audio. Stop remains available during that lead-in. These controls reduce host-narration overlap without claiming that the page can mute or schedule the host agent.
+
+When the person explicitly asks to hear the unprocessed source again during an observation phase, the agent reuses `play_listening_comparison` with `playback: reference`. This replay does not create a comparison, infer an observation, or change adaptation settings; the agent asks for the person's comparison only after playback completes.
 
 Only natural media end marks a leg heard. Stop or reset cancels a `starting` or `started` run and invalidates delayed continuation, so B cannot start after cancellation. Active playback, pending playback, and every terminal callback must carry the same run ID; a stale mismatch is a complete no-op. Direct page playback remains available when the agent grant is off.
 

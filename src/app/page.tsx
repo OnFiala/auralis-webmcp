@@ -24,10 +24,11 @@ import {
   type AuralisWebMcpPlaybackPort,
 } from "../browser/webmcp";
 import { MAX_MODEL_ATTEMPTS_PER_SESSION } from "../contracts/runtime";
-import type {
-  AuralisWebMcpPhase,
-  PlayListeningComparisonData,
-  ProfileId,
+import {
+  AURALIS_WEBMCP_AGENT_PLAYBACK_LEAD_IN_MS,
+  type AuralisWebMcpPhase,
+  type PlayListeningComparisonData,
+  type ProfileId,
 } from "../contracts/webmcp";
 import {
   canCompleteExperience,
@@ -679,10 +680,12 @@ export default function HomePage() {
   const modelRequestInFlightRef = useRef(false);
   const autoLoadedAgentSessionRef = useRef<string | null>(null);
   const activeAgentPlaybackRef = useRef<string | null>(null);
+  const agentLeadInCancelRef = useRef<(() => void) | null>(null);
   const guidedSequenceTokenRef = useRef(0);
   const [agentListeningCue, setAgentListeningCue] = useState<string | null>(null);
   const [agentAudioNotice, setAgentAudioNotice] = useState<string | null>(null);
   const [guidedTransitionActive, setGuidedTransitionActive] = useState(false);
+  const [agentLeadInActive, setAgentLeadInActive] = useState(false);
   const visible = projectVisibleExperienceState(experience);
   const terminalCompletion = projectTerminalCompletion(experience);
   const agentState = getAuralisState(experienceController);
@@ -702,6 +705,7 @@ export default function HomePage() {
   const controlsLocked =
     isRendering ||
     isPlaying ||
+    agentLeadInActive ||
     guidedTransitionActive ||
     experience.source.status === "loading";
   const selectedPredefinedProfile =
@@ -737,7 +741,9 @@ export default function HomePage() {
   const agentFocusPrefix = experience.webMcp.session
     ? "Focus: central speaker · "
     : "";
-  const listeningTransportStatus = guidedTransitionActive
+  const listeningTransportStatus = agentLeadInActive
+    ? "Quiet lead-in · Playback begins in eight seconds · The agent is silent."
+    : guidedTransitionActive
     ? experience.webMcp.session
       ? "Transition A → B · Same moment · Focus: central speaker."
       : "Transition A → B · Same moment · listening perspective changes now."
@@ -754,7 +760,9 @@ export default function HomePage() {
             : experience.webMcp.session
               ? "Playback stopped · A and B controls are ready · Focus: central speaker."
               : "Playback stopped · A and B controls are ready.";
-  const listeningTransportKind = guidedTransitionActive
+  const listeningTransportKind = agentLeadInActive
+    ? "preparing"
+    : guidedTransitionActive
     ? "transition"
     : renderingMode
     ? "preparing"
@@ -1013,6 +1021,7 @@ export default function HomePage() {
     guidedSequenceTokenRef.current += 1;
     const runId = activeAgentPlaybackRef.current;
     activeAgentPlaybackRef.current = null;
+    cancelAgentLeadIn();
     if (runId) {
       cancelWebMcpPlaybackRun(experienceController, runId);
     }
@@ -1023,7 +1032,14 @@ export default function HomePage() {
     setAgentListeningCue(
       runId ? "Playback stopped by the person. Nothing was counted as heard." : null,
     );
+    setAgentLeadInActive(false);
     setGuidedTransitionActive(false);
+  }
+
+  function cancelAgentLeadIn() {
+    const cancel = agentLeadInCancelRef.current;
+    agentLeadInCancelRef.current = null;
+    cancel?.();
   }
 
   async function playAgentRun(
@@ -1041,9 +1057,38 @@ export default function HomePage() {
 
     activeAgentPlaybackRef.current = run.runId;
     setGuidedTransitionActive(false);
+    setAgentLeadInActive(true);
+    setAgentListeningCue(
+      "The agent is silent. Listening begins after an eight-second quiet lead-in.",
+    );
+    cancelAgentLeadIn();
+    await new Promise<void>((resolve) => {
+      let settled = false;
+      let timeoutId: ReturnType<typeof setTimeout> | null = null;
+      const finishLeadIn = () => {
+        if (settled) return;
+        settled = true;
+        if (timeoutId !== null) clearTimeout(timeoutId);
+        if (agentLeadInCancelRef.current === finishLeadIn) {
+          agentLeadInCancelRef.current = null;
+        }
+        resolve();
+      };
+      timeoutId = setTimeout(
+        finishLeadIn,
+        AURALIS_WEBMCP_AGENT_PLAYBACK_LEAD_IN_MS,
+      );
+      agentLeadInCancelRef.current = finishLeadIn;
+    });
+    if (activeAgentPlaybackRef.current !== run.runId) {
+      setAgentLeadInActive(false);
+      return;
+    }
+    setAgentLeadInActive(false);
     setAgentListeningCue(run.narration.now);
     for (let index = 0; index < run.sequence.length; index += 1) {
       if (activeAgentPlaybackRef.current !== run.runId) {
+        setAgentLeadInActive(false);
         setGuidedTransitionActive(false);
         return;
       }
@@ -1051,6 +1096,7 @@ export default function HomePage() {
         setGuidedTransitionActive(true);
         await new Promise<void>((resolve) => setTimeout(resolve, 220));
         if (activeAgentPlaybackRef.current !== run.runId) {
+          setAgentLeadInActive(false);
           setGuidedTransitionActive(false);
           return;
         }
@@ -1066,11 +1112,13 @@ export default function HomePage() {
       });
       if (outcome === "cancelled") {
         activeAgentPlaybackRef.current = null;
+        setAgentLeadInActive(false);
         setGuidedTransitionActive(false);
         return;
       }
       if (outcome === "failed") {
         activeAgentPlaybackRef.current = null;
+        setAgentLeadInActive(false);
         setGuidedTransitionActive(false);
         failWebMcpPlaybackRun(experienceController, run.runId);
         throw new Error("The browser audio runtime could not complete playback.");
@@ -1081,6 +1129,7 @@ export default function HomePage() {
     }
     if (activeAgentPlaybackRef.current === run.runId) {
       activeAgentPlaybackRef.current = null;
+      setAgentLeadInActive(false);
       setGuidedTransitionActive(false);
       setAgentListeningCue(run.narration.after);
     }
@@ -1322,11 +1371,13 @@ export default function HomePage() {
     guidedSequenceTokenRef.current += 1;
     audioEngineRef.current?.stop();
     activeAgentPlaybackRef.current = null;
+    cancelAgentLeadIn();
     runIdRef.current = null;
     setSceneTranscript([]);
     autoLoadedAgentSessionRef.current = null;
     setAgentListeningCue(null);
     setAgentAudioNotice(null);
+    setAgentLeadInActive(false);
     flushSync(() => {
       resetWebMcpExperience(experienceController);
     });
@@ -3302,7 +3353,9 @@ export default function HomePage() {
         humanGate={agentState.humanGate}
         allowedNextTools={agentState.allowedNextTools}
         controlsBusy={controlsLocked}
-        stopAvailable={isPlaying || isRendering || guidedTransitionActive}
+        stopAvailable={
+          isPlaying || isRendering || agentLeadInActive || guidedTransitionActive
+        }
         onStopImmediately={stopPlayback}
         onConfirmConsent={confirmAgentConsent}
         onResetSession={resetAgentSession}

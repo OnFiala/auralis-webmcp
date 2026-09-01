@@ -315,7 +315,7 @@ const LISTENING_GUIDANCE = Object.freeze({
     "overall-scene",
   ] as const),
   askForObservation:
-    "After playback, ask the person what they noticed in their own everyday words.",
+    "After playback, ask the person what they noticed in their own everyday words. If they ask to hear the source reference again, replay A before recording an observation.",
   translateEverydayLanguage:
     "Translate only the person's stated meaning into the bounded observation fields. Never ask them to name internal enum values and never infer a diagnosis.",
   noDifferenceRecovery:
@@ -569,7 +569,7 @@ function agentContinuationForState(
       return state.agentPlaybackGranted
         ? callToolContinuation(
             "play_listening_comparison",
-            "Briefly explain what A and B represent and the listening focus before playback. Finish that explanation completely, then call play_listening_comparison for the current comparison. Prefer reference-then-simulated with important-speaker focus when both perspectives remain unheard. Treat the pending tool call as a silent listening interval: do not speak, write narration, or call another tool until it returns after completion, failure, or the person's Stop action. Only then ask what the person noticed.",
+            "Call play_listening_comparison immediately for the current comparison without a spoken or written preface. Prefer reference-then-simulated with important-speaker focus when both perspectives remain unheard. The page owns the visible explanation and an eight-second quiet lead-in. Treat the pending tool call as a silent listening interval: do not speak, write narration, or call another tool until it returns after completion, failure, or the person's Stop action. Only then ask what the person noticed.",
           )
         : standardWaitContinuation(
             state,
@@ -581,7 +581,7 @@ function agentContinuationForState(
       return standardWaitContinuation(
         state,
         "ask-then-wait",
-        "Ask what the person noticed in everyday language. If their answer is already present in the current message, translate only that answer and call record_user_observation. Otherwise call wait_for_session_change with the exact waitInput after asking; do not require enum wording.",
+        "Ask what the person noticed in everyday language. If they explicitly ask to hear A or the source reference again, do not record an observation yet: call play_listening_comparison with playback reference for the current comparison, remain silent through the page-owned lead-in and playback, then ask what they noticed compared with B. Replay B or A-then-B only when explicitly requested or required by the no-difference recovery. If their observation is already present in the current message, translate only that answer and call record_user_observation. Otherwise call wait_for_session_change with the exact waitInput after asking; do not require enum wording.",
       );
     case "ready_for_adaptation":
       if (state.interventionState !== "tv-off") {

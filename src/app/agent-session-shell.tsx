@@ -82,7 +82,7 @@ const phaseCopy: Record<
     eyebrow: "Tell the agent",
     heading: "What did you notice?",
     detail:
-      "Describe the focused voice and any masking sound by typing or speaking to the agent.",
+      "Describe the focused voice and any masking sound, or ask the agent to replay A before you answer.",
   },
   ready_for_adaptation: {
     eyebrow: "Agent action",
@@ -100,7 +100,7 @@ const phaseCopy: Record<
     eyebrow: "Tell the agent",
     heading: "Did that change help?",
     detail:
-      "Share what became clearer, stayed the same, or became harder. The agent records only what you report.",
+      "Share what changed, or ask the agent to replay A before you compare. It records only what you report.",
   },
   complete: {
     eyebrow: "Session complete",

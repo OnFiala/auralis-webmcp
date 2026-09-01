@@ -300,7 +300,7 @@ test("pending waits preserve consent and derive an omitted profile timeout", asy
 });
 
 test("a staged WebMCP session preserves human gates and completes through browser tools plus visible human controls", async ({ page }) => {
-  test.setTimeout(120_000);
+  test.setTimeout(180_000);
   const modelCalls = await trackModelCalls(page);
   const designQaCapture = process.env.AURALIS_DESIGN_QA_CAPTURE;
   const mobileDesignQaCapture = designQaCapture === "mobile";
@@ -619,50 +619,48 @@ test("a staged WebMCP session preserves human gates and completes through browse
     error: { code: "INVALID_PHASE" },
   });
 
-  const transitionRunPromise = callTool(page, "play_listening_comparison", {
-    requestId: "verify-transition-stop",
+  const leadInRunPromise = callTool(page, "play_listening_comparison", {
+    requestId: "verify-lead-in-stop",
     expectedRevision: afterImmediateStop.revision,
     comparisonId: "comparison-1",
     playback: "reference-then-simulated",
     focus: "important-speaker",
   });
-  await expect
-    .poll(
-      () => page.locator(".ab-playback-grid").getAttribute("data-transport-state"),
-      { timeout: 20_000, intervals: [20] },
-    )
-    .toBe("transition");
+  await expect(page.locator(".ab-playback-grid")).toHaveAttribute(
+    "data-transport-state",
+    "preparing",
+    { timeout: 1_000 },
+  );
   await expect(page.locator(".listening-transport-status")).toContainText(
-    "Transition A → B",
+    "Quiet lead-in",
   );
   await expect(stop).toBeEnabled();
+  const stopStartedAt = Date.now();
   await stop.click();
-  await expect(page.locator(".ab-playback-grid")).not.toHaveAttribute(
-    "data-transport-state",
-    "transition",
-  );
-  await expect(transitionRunPromise).resolves.toMatchObject({
+  const leadInResult = await leadInRunPromise;
+  expect(Date.now() - stopStartedAt).toBeLessThan(2_000);
+  expect(leadInResult).toMatchObject({
     ok: true,
     replayed: false,
     phase: "awaiting_baseline_listening",
     data: { status: "cancelled", sequence: ["reference", "simulated"] },
   });
-  const afterTransitionStop = await callTool(page, "get_auralis_state", {});
-  expect(afterTransitionStop).toMatchObject({
+  const afterLeadInStop = await callTool(page, "get_auralis_state", {});
+  expect(afterLeadInStop).toMatchObject({
     ok: true,
     phase: "awaiting_baseline_listening",
     data: {
       audio: { playbackStatus: "stopped" },
-      currentComparison: { heardPlaybackModes: ["reference"] },
+      currentComparison: { heardPlaybackModes: [] },
     },
   });
-  const transitionEvidence = await callTool(page, "get_session_evidence", {});
-  expect(transitionEvidence).toMatchObject({
+  const leadInEvidence = await callTool(page, "get_session_evidence", {});
+  expect(leadInEvidence).toMatchObject({
     data: {
       evidence: {
         playbackRuns: expect.arrayContaining([
           expect.objectContaining({
-            requestId: "verify-transition-stop",
+            requestId: "verify-lead-in-stop",
             status: "cancelled",
           }),
         ]),
@@ -672,7 +670,7 @@ test("a staged WebMCP session preserves human gates and completes through browse
 
   const guidedBaseline = await callTool(page, "play_listening_comparison", {
     requestId: "verify-guided-baseline",
-    expectedRevision: afterTransitionStop.revision,
+    expectedRevision: afterLeadInStop.revision,
     comparisonId: "comparison-1",
     playback: "reference-then-simulated",
     focus: "important-speaker",
@@ -699,6 +697,19 @@ test("a staged WebMCP session preserves human gates and completes through browse
       currentComparison: { heardPlaybackModes: ["reference", "simulated"] },
     },
   });
+  const referenceReplay = await callTool(page, "play_listening_comparison", {
+    requestId: "verify-reference-replay",
+    expectedRevision: baselineReadyForObservation.revision,
+    comparisonId: "comparison-1",
+    playback: "reference",
+    focus: "important-speaker",
+  });
+  expect(referenceReplay).toMatchObject({
+    ok: true,
+    phase: "awaiting_baseline_observation",
+    data: { status: "completed", sequence: ["reference"] },
+  });
+  await expect(page.getByRole("heading", { name: "What did you notice?" })).toBeFocused();
   await page
     .getByRole("button", { name: "I do not hear a clear difference" })
     .click();
