@@ -224,7 +224,7 @@ test("registration and failed stage requests remain inert before the sole activa
   expect(modelCalls.count()).toBe(0);
 });
 
-test("a pending read-only wait resolves when the person advances the visible consent gate", async ({ page }) => {
+test("pending waits preserve consent and derive an omitted profile timeout", async ({ page }) => {
   await openWithMockWebMcp(page);
   const staged = await callTool(
     page,
@@ -278,6 +278,24 @@ test("a pending read-only wait resolves when the person advances the visible con
       defaultProfileId: "asymmetric-hearing-loss",
       doNotEndTurn: true,
     },
+  });
+
+  const profileWaitWithoutOptionalTimeout = callTool(
+    page,
+    "wait_for_session_change",
+    {
+      sessionId: staged.sessionId,
+      afterRevision: 2,
+    },
+  );
+  await page
+    .getByRole("button", { name: "Use Flat hearing loss" })
+    .click();
+  await expect(profileWaitWithoutOptionalTimeout).resolves.toMatchObject({
+    ok: true,
+    phase: "awaiting_scene_load",
+    revision: 3,
+    data: { reason: "changed" },
   });
 });
 

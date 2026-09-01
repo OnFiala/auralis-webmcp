@@ -355,7 +355,7 @@ describe("Auralis WebMCP deterministic domain contract", () => {
     });
   });
 
-  it("projects grounded profile narration and a 15-second asymmetric default window", async () => {
+  it("derives the 15-second asymmetric default window when timeout is omitted", async () => {
     vi.useFakeTimers();
     try {
       expect(AURALIS_WEBMCP_PROFILE_OVERRIDE_TIMEOUT_MS).toBe(15_000);
@@ -403,7 +403,6 @@ describe("Auralis WebMCP deterministic domain contract", () => {
       const pending = waitForSessionChange(controller, {
         sessionId: SESSION_ID,
         afterRevision: revision,
-        timeoutMs: AURALIS_WEBMCP_PROFILE_OVERRIDE_TIMEOUT_MS,
       });
       let settled = false;
       void pending.then(() => {
@@ -530,6 +529,43 @@ describe("Auralis WebMCP deterministic domain contract", () => {
     expect(base.getSnapshot()).toBe(before);
   });
 
+  it("resolves changed or replaced before evaluating an explicit phase duration", async () => {
+    const base = createExperienceController();
+    expect(stage(base).ok).toBe(true);
+    expect(confirmWebMcpConsent(base).changed).toBe(true);
+    const subscribe = vi.fn(base.subscribe);
+    const controller: ExperienceController = Object.freeze({
+      getSnapshot: base.getSnapshot,
+      commit: base.commit,
+      subscribe,
+    });
+    const before = base.getSnapshot();
+
+    await expect(
+      waitForSessionChange(controller, {
+        sessionId: SESSION_ID,
+        afterRevision: 1,
+        timeoutMs: AURALIS_WEBMCP_WAIT_TIMEOUT_MS,
+      }),
+    ).resolves.toMatchObject({
+      ok: true,
+      revision: 2,
+      data: { reason: "changed" },
+    });
+    await expect(
+      waitForSessionChange(controller, {
+        sessionId: NEXT_SESSION_ID,
+        afterRevision: 2,
+        timeoutMs: AURALIS_WEBMCP_WAIT_TIMEOUT_MS,
+      }),
+    ).resolves.toMatchObject({
+      ok: true,
+      data: { reason: "session-replaced" },
+    });
+    expect(subscribe).not.toHaveBeenCalled();
+    expect(base.getSnapshot()).toBe(before);
+  });
+
   it("rejects wait durations outside the two governed bounds", async () => {
     const controller = createExperienceController();
     expect(stage(controller).ok).toBe(true);
@@ -574,7 +610,7 @@ describe("Auralis WebMCP deterministic domain contract", () => {
     expect(base.getSnapshot()).toBe(before);
   });
 
-  it("requires the 15-second bound during profile selection", async () => {
+  it("rejects an explicit 60-second bound during profile selection", async () => {
     const base = createExperienceController();
     expect(stage(base).ok).toBe(true);
     expect(confirmWebMcpConsent(base).changed).toBe(true);
@@ -586,20 +622,17 @@ describe("Auralis WebMCP deterministic domain contract", () => {
     });
     const before = base.getSnapshot();
 
-    for (const input of [
-      { sessionId: SESSION_ID, afterRevision: 2 },
-      {
+    await expect(
+      waitForSessionChange(controller, {
         sessionId: SESSION_ID,
         afterRevision: 2,
         timeoutMs: AURALIS_WEBMCP_WAIT_TIMEOUT_MS,
-      },
-    ]) {
-      await expect(waitForSessionChange(controller, input)).resolves.toMatchObject({
-        ok: false,
-        phase: "awaiting_profile_selection",
-        error: { code: "INVALID_PHASE" },
-      });
-    }
+      }),
+    ).resolves.toMatchObject({
+      ok: false,
+      phase: "awaiting_profile_selection",
+      error: { code: "INVALID_PHASE" },
+    });
     expect(subscribe).not.toHaveBeenCalled();
     expect(base.getSnapshot()).toBe(before);
   });

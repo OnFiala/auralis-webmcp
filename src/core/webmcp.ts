@@ -1147,7 +1147,7 @@ export async function waitForSessionChange(
       ? AURALIS_WEBMCP_PROFILE_OVERRIDE_TIMEOUT_MS
       : AURALIS_WEBMCP_WAIT_TIMEOUT_MS;
   if (
-    (input.timeoutMs ?? AURALIS_WEBMCP_WAIT_TIMEOUT_MS) !== canonicalTimeoutMs
+    input.timeoutMs !== undefined && input.timeoutMs !== canonicalTimeoutMs
   ) {
     return errorResult(
       "wait_for_session_change",
@@ -1156,6 +1156,10 @@ export async function waitForSessionChange(
       "INVALID_PHASE",
     );
   }
+  const effectiveInput: WaitForSessionChangeInput = Object.freeze({
+    ...input,
+    timeoutMs: canonicalTimeoutMs,
+  });
   if (
     !shouldOfferSessionWait(
       initial,
@@ -1201,7 +1205,7 @@ export async function waitForSessionChange(
     };
 
     const settleFromSnapshot = (state: ExperienceState): boolean => {
-      const decision = waitDecisionForSnapshot(state, input);
+      const decision = waitDecisionForSnapshot(state, effectiveInput);
       if (!decision) return false;
       settle(
         decision.kind === "error"
@@ -1211,7 +1215,7 @@ export async function waitForSessionChange(
               state,
               decision.code,
             )
-          : waitSuccess(state, decision.reason, input),
+          : waitSuccess(state, decision.reason, effectiveInput),
       );
       return true;
     };
@@ -1237,9 +1241,9 @@ export async function waitForSessionChange(
     timer = setTimeout(() => {
       const current = controller.getSnapshot();
       if (!settleFromSnapshot(current)) {
-        settle(waitSuccess(current, "timeout", input));
+        settle(waitSuccess(current, "timeout", effectiveInput));
       }
-    }, input.timeoutMs ?? AURALIS_WEBMCP_WAIT_TIMEOUT_MS);
+    }, effectiveInput.timeoutMs);
   });
 }
 
