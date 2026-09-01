@@ -176,8 +176,8 @@ export function AgentFinalSummary({
               </p>
             </div>
             <Image
-              src="/media/auralis-hearing-aid-education-v1.webp"
-              alt="Educational illustration of an ear wearing a behind-the-ear hearing aid"
+              src="/media/auralis-hearing-aid-education-bte-v2.webp"
+              alt="Side view of an ear wearing a behind-the-ear hearing aid with its body behind the ear and an earmould seated in the ear"
               width={1254}
               height={1254}
               sizes="(max-width: 700px) 38vw, 12rem"

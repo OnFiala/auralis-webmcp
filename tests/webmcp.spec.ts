@@ -898,15 +898,29 @@ test("a staged WebMCP session preserves human gates and completes through browse
   ).toBeVisible();
   await expect(
     page.getByRole("img", {
-      name: "Educational illustration of an ear wearing a behind-the-ear hearing aid",
+      name: "Side view of an ear wearing a behind-the-ear hearing aid with its body behind the ear and an earmould seated in the ear",
     }),
-  ).toHaveAttribute("src", /auralis-hearing-aid-education-v1/);
+  ).toHaveAttribute("src", /auralis-hearing-aid-education-bte-v2/);
   await expect(page.getByText("What you compared", { exact: true })).toHaveCount(0);
   await expect(page.getByText("Your session path", { exact: true })).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: "Download conversation guide" }),
   ).toHaveCount(0);
   if (process.env.AURALIS_SUMMARY_QA_CAPTURE) {
+    const hearingAidImage = page.getByRole("img", {
+      name: "Side view of an ear wearing a behind-the-ear hearing aid with its body behind the ear and an earmould seated in the ear",
+    });
+    await hearingAidImage.scrollIntoViewIfNeeded();
+    await expect
+      .poll(() =>
+        hearingAidImage.evaluate((image) => (image as HTMLImageElement).complete),
+      )
+      .toBe(true);
+    if (process.env.AURALIS_BTE_QA_CAPTURE) {
+      await hearingAidImage.screenshot({
+        path: process.env.AURALIS_BTE_QA_CAPTURE,
+      });
+    }
     await page.screenshot({
       path: process.env.AURALIS_SUMMARY_QA_CAPTURE,
       fullPage: true,

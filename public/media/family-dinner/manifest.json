@@ -32,7 +32,7 @@
   },
   "classification": "original synthetic generated media",
   "generatedAt": "2026-07-17T15:11:50.906529+00:00",
-  "lastUpdatedAt": "2026-09-01T20:16:13Z",
+  "lastUpdatedAt": "2026-09-01T20:32:50Z",
   "scene": {
     "title": "Greenhouse Plans After Dinner",
     "concept": "Three fictional adult relatives finish dinner while planning a Saturday repair of their neighborhood greenhouse. A fictional local evening-news bulletin and restrained kitchen-room ambience create competing but intelligible background sound.",
@@ -94,6 +94,41 @@
       },
       "originAndRights": {
         "thirdPartySource": "none",
+        "licenseBasis": "OpenAI-generated output, subject to applicable OpenAI terms.",
+        "copyrightGuaranteed": false,
+        "uniquenessGuaranteed": false,
+        "ownerReviewRequired": true,
+        "ownerReviewCompleted": true,
+        "ownerReviewCompletedAt": "2026-09-01",
+        "ownerReviewDecision": "rejected",
+        "ownerReviewNote": "Rejected because the device placement and earpiece fit did not read as an anatomically credible BTE fitting.",
+        "aiDisclosureRequired": true,
+        "aiDisclosureLocation": "this generated-media manifest"
+      }
+    },
+    {
+      "file": "../auralis-hearing-aid-education-bte-v2.webp",
+      "role": "agent-session terminal educational BTE illustration",
+      "sha256": "10a571eaa1aa4545bcb36ceeda4e464eb4bf620f08e2fa80f85c314ef0e93ef7",
+      "pixelDimensions": {
+        "width": 1254,
+        "height": 1254
+      },
+      "classification": "AI-generated static educational UI asset",
+      "sourceFile": "Codex built-in ImageGen output; source PNG is retained outside the public package",
+      "generatedAt": "2026-09-01",
+      "generation": {
+        "tool": "Codex built-in ImageGen",
+        "runtimeModelIdEvidence": "not exposed by the Codex task host",
+        "referenceOnlySources": [
+          "https://www.widex.com/en-us/support/hearing-aids/bte-hearing-aids/",
+          "https://www.widex.com/-/media/widex/en-ca/booklets/what-is-a-hearing-aid-ca.pdf"
+        ],
+        "requestedEdit": "Create an original unbranded medical-educational illustration of a correctly worn traditional BTE: device body behind the pinna, clear earhook and tubing over the helix, and a fitted translucent earmould seated in the concha with its bore entering the ear canal. Do not copy the reference layout, people, product, branding, text, or logos.",
+        "postProcessing": "Converted the generated 1254x1254 RGB PNG to WebP with cwebp 1.6.0 at quality 86; dimensions preserved and metadata removed."
+      },
+      "originAndRights": {
+        "thirdPartySource": "Official Widex material was used only to check BTE anatomy. The generated output is a new composition with no visible Widex branding, labels, or copied page layout; pixel-level uniqueness is not guaranteed.",
         "licenseBasis": "OpenAI-generated output, subject to applicable OpenAI terms.",
         "copyrightGuaranteed": false,
         "uniquenessGuaranteed": false,
