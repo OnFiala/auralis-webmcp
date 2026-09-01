@@ -9,6 +9,7 @@ import {
 } from "./experience";
 import { ACTIVE_PREDEFINED_PROFILE_SET_VERSION } from "./profile";
 import {
+  AURALIS_WEBMCP_PROFILE_OVERRIDE_TIMEOUT_MS,
   AURALIS_WEBMCP_WAIT_TIMEOUT_MS,
   cancelWebMcpPlaybackRun,
   completeWebMcpNoDifferenceRecovery,
@@ -317,6 +318,18 @@ describe("Auralis WebMCP deterministic domain contract", () => {
       revision: 1,
       phase: "awaiting_consent",
       sessionId: SESSION_ID,
+      continuation: {
+        policy: "continue-current-agent-run",
+        action: "explain-then-wait",
+        tool: "wait_for_session_change",
+        waitInput: {
+          sessionId: SESSION_ID,
+          afterRevision: 1,
+          timeoutMs: 60_000,
+        },
+        defaultProfileId: null,
+        doNotEndTurn: true,
+      },
       data: {
         operation: "started",
         stagedProfile: null,
@@ -340,6 +353,155 @@ describe("Auralis WebMCP deterministic domain contract", () => {
         session: { presentation: "agent-guided", stageCount: 1 },
       },
     });
+  });
+
+  it("projects grounded profile narration and a 15-second asymmetric default window", async () => {
+    vi.useFakeTimers();
+    try {
+      expect(AURALIS_WEBMCP_PROFILE_OVERRIDE_TIMEOUT_MS).toBe(15_000);
+      const controller = createExperienceController();
+      expect(stage(controller).ok).toBe(true);
+      expect(confirmWebMcpConsent(controller).changed).toBe(true);
+      const revision = controller.getSnapshot().webMcp.revision;
+      const state = getAuralisState(controller);
+
+      expect(state).toMatchObject({
+        phase: "awaiting_profile_selection",
+        continuation: {
+          action: "explain-profiles-then-wait",
+          tool: "wait_for_session_change",
+          waitInput: {
+            sessionId: SESSION_ID,
+            afterRevision: revision,
+            timeoutMs: 15_000,
+          },
+          defaultProfileId: "asymmetric-hearing-loss",
+          doNotEndTurn: true,
+        },
+        data: {
+          availableProfiles: [
+            {
+              profileId: "high-frequency-hearing-loss",
+              everydayDescription: expect.any(String),
+              demonstrates: expect.any(String),
+            },
+            {
+              profileId: "flat-hearing-loss",
+              everydayDescription: expect.any(String),
+              demonstrates: expect.any(String),
+            },
+            {
+              profileId: "asymmetric-hearing-loss",
+              everydayDescription: expect.stringContaining("which side"),
+              demonstrates: expect.stringContaining("left-right"),
+            },
+          ],
+        },
+      });
+
+      const before = controller.getSnapshot();
+      const pending = waitForSessionChange(controller, {
+        sessionId: SESSION_ID,
+        afterRevision: revision,
+        timeoutMs: AURALIS_WEBMCP_PROFILE_OVERRIDE_TIMEOUT_MS,
+      });
+      let settled = false;
+      void pending.then(() => {
+        settled = true;
+      });
+      await vi.advanceTimersByTimeAsync(
+        AURALIS_WEBMCP_PROFILE_OVERRIDE_TIMEOUT_MS - 1,
+      );
+      expect(settled).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+
+      await expect(pending).resolves.toMatchObject({
+        ok: true,
+        revision,
+        data: { reason: "timeout" },
+        continuation: {
+          action: "select-default-profile",
+          tool: "stage_demo_session",
+          defaultProfileId: "asymmetric-hearing-loss",
+          doNotEndTurn: true,
+        },
+      });
+      expect(controller.getSnapshot()).toBe(before);
+      expect(controller.getSnapshot().webMcp.session?.confirmedProfileId).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("lets a direct human profile choice win during the default window", async () => {
+    const controller = createExperienceController();
+    expect(stage(controller).ok).toBe(true);
+    expect(confirmWebMcpConsent(controller).changed).toBe(true);
+    const revision = controller.getSnapshot().webMcp.revision;
+    const pending = waitForSessionChange(controller, {
+      sessionId: SESSION_ID,
+      afterRevision: revision,
+      timeoutMs: AURALIS_WEBMCP_PROFILE_OVERRIDE_TIMEOUT_MS,
+    });
+
+    expect(selectWebMcpProfile(controller, "flat-hearing-loss").changed).toBe(true);
+    await expect(pending).resolves.toMatchObject({
+      ok: true,
+      phase: "awaiting_scene_load",
+      data: { reason: "changed" },
+      continuation: {
+        action: "explain-then-wait",
+        tool: "wait_for_session_change",
+        waitInput: {
+          afterRevision: revision + 1,
+          timeoutMs: 60_000,
+        },
+        defaultProfileId: null,
+      },
+    });
+    expect(controller.getSnapshot().webMcp.session?.confirmedProfileId).toBe(
+      "flat-hearing-loss",
+    );
+  });
+
+  it("rejects the asymmetric default if a human wins after timeout but before commit", async () => {
+    vi.useFakeTimers();
+    try {
+      const controller = createExperienceController();
+      expect(stage(controller).ok).toBe(true);
+      expect(confirmWebMcpConsent(controller).changed).toBe(true);
+      const profileRevision = controller.getSnapshot().webMcp.revision;
+      const pending = waitForSessionChange(controller, {
+        sessionId: SESSION_ID,
+        afterRevision: profileRevision,
+        timeoutMs: AURALIS_WEBMCP_PROFILE_OVERRIDE_TIMEOUT_MS,
+      });
+      await vi.advanceTimersByTimeAsync(
+        AURALIS_WEBMCP_PROFILE_OVERRIDE_TIMEOUT_MS,
+      );
+      await expect(pending).resolves.toMatchObject({
+        ok: true,
+        data: { reason: "timeout" },
+      });
+
+      expect(selectWebMcpProfile(controller, "high-frequency-hearing-loss").changed).toBe(
+        true,
+      );
+      const staleDefault = stageDemoSession(controller, {
+        requestId: "late-asymmetric-default",
+        expectedRevision: profileRevision,
+        action: "select-profile",
+        goal: "family-understanding",
+        profileId: "asymmetric-hearing-loss",
+      });
+
+      expectError(staleDefault, "STALE_REVISION");
+      expect(controller.getSnapshot().webMcp.session?.confirmedProfileId).toBe(
+        "high-frequency-hearing-loss",
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("returns an already-observed revision immediately without subscribing", async () => {
@@ -366,6 +528,159 @@ describe("Auralis WebMCP deterministic domain contract", () => {
     });
     expect(subscribe).not.toHaveBeenCalled();
     expect(base.getSnapshot()).toBe(before);
+  });
+
+  it("rejects wait durations outside the two governed bounds", async () => {
+    const controller = createExperienceController();
+    expect(stage(controller).ok).toBe(true);
+    const before = controller.getSnapshot();
+
+    await expect(
+      waitForSessionChange(controller, {
+        sessionId: SESSION_ID,
+        afterRevision: 1,
+        timeoutMs: 10_000,
+      }),
+    ).resolves.toMatchObject({
+      ok: false,
+      error: { code: "INVALID_INPUT" },
+    });
+    expect(controller.getSnapshot()).toBe(before);
+  });
+
+  it("rejects the 15-second bound outside profile selection without subscribing", async () => {
+    const base = createExperienceController();
+    expect(stage(base).ok).toBe(true);
+    const subscribe = vi.fn(base.subscribe);
+    const controller: ExperienceController = Object.freeze({
+      getSnapshot: base.getSnapshot,
+      commit: base.commit,
+      subscribe,
+    });
+    const before = base.getSnapshot();
+
+    await expect(
+      waitForSessionChange(controller, {
+        sessionId: SESSION_ID,
+        afterRevision: 1,
+        timeoutMs: AURALIS_WEBMCP_PROFILE_OVERRIDE_TIMEOUT_MS,
+      }),
+    ).resolves.toMatchObject({
+      ok: false,
+      phase: "awaiting_consent",
+      error: { code: "INVALID_PHASE" },
+    });
+    expect(subscribe).not.toHaveBeenCalled();
+    expect(base.getSnapshot()).toBe(before);
+  });
+
+  it("requires the 15-second bound during profile selection", async () => {
+    const base = createExperienceController();
+    expect(stage(base).ok).toBe(true);
+    expect(confirmWebMcpConsent(base).changed).toBe(true);
+    const subscribe = vi.fn(base.subscribe);
+    const controller: ExperienceController = Object.freeze({
+      getSnapshot: base.getSnapshot,
+      commit: base.commit,
+      subscribe,
+    });
+    const before = base.getSnapshot();
+
+    for (const input of [
+      { sessionId: SESSION_ID, afterRevision: 2 },
+      {
+        sessionId: SESSION_ID,
+        afterRevision: 2,
+        timeoutMs: AURALIS_WEBMCP_WAIT_TIMEOUT_MS,
+      },
+    ]) {
+      await expect(waitForSessionChange(controller, input)).resolves.toMatchObject({
+        ok: false,
+        phase: "awaiting_profile_selection",
+        error: { code: "INVALID_PHASE" },
+      });
+    }
+    expect(subscribe).not.toHaveBeenCalled();
+    expect(base.getSnapshot()).toBe(before);
+  });
+
+  it("accepts the 60-second bound at the comfortable-volume gate", async () => {
+    const controller = createExperienceController();
+    expect(stage(controller).ok).toBe(true);
+    expect(confirmWebMcpConsent(controller).changed).toBe(true);
+    expect(selectProfileWithAgent(controller).ok).toBe(true);
+    commitHuman(controller, (state) =>
+      experienceReducer(state, { type: "source-load-started" }),
+    );
+    commitHuman(controller, (state) =>
+      experienceReducer(state, {
+        type: "source-ready",
+        sourceIdentity: SOURCE_IDENTITY,
+        sampleRate: 24_000,
+        frameCount: 1_536_000,
+        durationSeconds: 64,
+      }),
+    );
+    const revision = controller.getSnapshot().webMcp.revision;
+    const pending = waitForSessionChange(controller, {
+      sessionId: SESSION_ID,
+      afterRevision: revision,
+      timeoutMs: AURALIS_WEBMCP_WAIT_TIMEOUT_MS,
+    });
+
+    expect(confirmWebMcpListeningReadiness(controller, false).changed).toBe(true);
+    await expect(pending).resolves.toMatchObject({
+      ok: true,
+      revision: revision + 1,
+      data: { reason: "changed" },
+      continuation: {
+        action: "explain-then-wait",
+        tool: "wait_for_session_change",
+        waitInput: { timeoutMs: 60_000 },
+      },
+    });
+  });
+
+  it("directs a failed scene load to visible Retry and wakes on retry", async () => {
+    const controller = createExperienceController();
+    expect(stage(controller).ok).toBe(true);
+    expect(confirmWebMcpConsent(controller).changed).toBe(true);
+    expect(selectProfileWithAgent(controller).ok).toBe(true);
+    commitHuman(controller, (state) =>
+      experienceReducer(state, { type: "source-load-started" }),
+    );
+    commitHuman(controller, (state) =>
+      experienceReducer(state, {
+        type: "operation-failed",
+        code: "source-load-failed",
+      }),
+    );
+    const revision = controller.getSnapshot().webMcp.revision;
+    expect(getAuralisState(controller)).toMatchObject({
+      phase: "awaiting_scene_load",
+      continuation: {
+        action: "explain-then-wait",
+        instruction: expect.stringContaining("visible Retry"),
+        tool: "wait_for_session_change",
+        waitInput: { afterRevision: revision, timeoutMs: 60_000 },
+      },
+    });
+    const pending = waitForSessionChange(controller, {
+      sessionId: SESSION_ID,
+      afterRevision: revision,
+      timeoutMs: AURALIS_WEBMCP_WAIT_TIMEOUT_MS,
+    });
+
+    commitHuman(controller, (state) =>
+      experienceReducer(state, { type: "source-load-started" }),
+    );
+    await expect(pending).resolves.toMatchObject({
+      ok: true,
+      data: { reason: "changed" },
+      continuation: {
+        instruction: expect.stringContaining("loading the fixed family scene automatically"),
+      },
+    });
   });
 
   it("rejects a fresh wait when deterministic baseline preparation is ready", async () => {
@@ -466,6 +781,17 @@ describe("Auralis WebMCP deterministic domain contract", () => {
       ok: true,
       revision: 2,
       data: { reason: "changed" },
+      continuation: {
+        action: "explain-profiles-then-wait",
+        tool: "wait_for_session_change",
+        waitInput: {
+          sessionId: SESSION_ID,
+          afterRevision: 2,
+          timeoutMs: 15_000,
+        },
+        defaultProfileId: "asymmetric-hearing-loss",
+        doNotEndTurn: true,
+      },
     });
     expect(activeSubscriptions).toBe(0);
   });
@@ -728,18 +1054,33 @@ describe("Auralis WebMCP deterministic domain contract", () => {
 
   it("makes granted playback exclusive and keeps ungranted playback human-driven", () => {
     const humanPlayback = atomicListeningController(false);
-    expect(getAuralisState(humanPlayback).allowedNextTools).toEqual([
-      "get_auralis_state",
-      "get_session_evidence",
-      "wait_for_session_change",
-    ]);
+    expect(getAuralisState(humanPlayback)).toMatchObject({
+      allowedNextTools: [
+        "get_auralis_state",
+        "get_session_evidence",
+        "wait_for_session_change",
+      ],
+      continuation: {
+        action: "explain-then-wait",
+        tool: "wait_for_session_change",
+        waitInput: { timeoutMs: 60_000 },
+      },
+    });
 
     const agentPlayback = atomicListeningController(true);
-    expect(getAuralisState(agentPlayback).allowedNextTools).toEqual([
-      "get_auralis_state",
-      "get_session_evidence",
-      "play_listening_comparison",
-    ]);
+    expect(getAuralisState(agentPlayback)).toMatchObject({
+      allowedNextTools: [
+        "get_auralis_state",
+        "get_session_evidence",
+        "play_listening_comparison",
+      ],
+      continuation: {
+        action: "call-tool",
+        tool: "play_listening_comparison",
+        waitInput: null,
+        doNotEndTurn: true,
+      },
+    });
     play(agentPlayback, "reference");
     expect(getAuralisState(agentPlayback).allowedNextTools).toEqual([
       "get_auralis_state",
@@ -769,6 +1110,10 @@ describe("Auralis WebMCP deterministic domain contract", () => {
         "prepare_comparison",
         "wait_for_session_change",
       ],
+      continuation: {
+        action: "call-tool",
+        tool: "prepare_comparison",
+      },
     });
   });
 

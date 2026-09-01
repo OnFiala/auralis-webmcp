@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const AURALIS_WEBMCP_CONTRACT_VERSION = "auralis-webmcp-v1.6" as const;
+export const AURALIS_WEBMCP_CONTRACT_VERSION = "auralis-webmcp-v1.7" as const;
 export const AURALIS_WEBMCP_EVIDENCE_SCHEMA_VERSION =
   "auralis-webmcp-evidence-v4" as const;
 export const AURALIS_WEBMCP_LIMITATION =
@@ -8,6 +8,8 @@ export const AURALIS_WEBMCP_LIMITATION =
 export const AURALIS_WEBMCP_MAX_REVISION = 2_147_483_647;
 export const AURALIS_WEBMCP_MAX_ADAPTATIONS = 2 as const;
 export const AURALIS_WEBMCP_MAX_PLAYBACK_RUNS_PER_COMPARISON = 3 as const;
+export const AURALIS_WEBMCP_PROFILE_OVERRIDE_TIMEOUT_MS = 15_000 as const;
+export const AURALIS_WEBMCP_WAIT_TIMEOUT_MS = 60_000 as const;
 
 export const AURALIS_TOOL_NAMES = [
   "get_auralis_state",
@@ -177,6 +179,12 @@ export const waitForSessionChangeInputSchema = z
   .object({
     sessionId: sessionIdSchema,
     afterRevision: expectedRevisionSchema,
+    timeoutMs: z
+      .union([
+        z.literal(AURALIS_WEBMCP_PROFILE_OVERRIDE_TIMEOUT_MS),
+        z.literal(AURALIS_WEBMCP_WAIT_TIMEOUT_MS),
+      ])
+      .optional(),
   })
   .strict();
 export const stageDemoSessionInputSchema = z.discriminatedUnion("action", [
@@ -365,6 +373,59 @@ export type HumanGateProjection = Readonly<{
   controlChannels: readonly ControlChannel[];
 }>;
 
+type AgentContinuationBase = Readonly<{
+  policy: "continue-current-agent-run";
+  instruction: string;
+}>;
+
+type AgentWaitInput<T extends 15_000 | 60_000> = Readonly<{
+  sessionId: string;
+  afterRevision: number;
+  timeoutMs: T;
+}>;
+
+export type AgentContinuationProjection =
+  | (AgentContinuationBase &
+      Readonly<{
+        action: "call-tool";
+        tool: AuralisToolName;
+        waitInput: null;
+        defaultProfileId: null;
+        doNotEndTurn: true;
+      }>)
+  | (AgentContinuationBase &
+      Readonly<{
+        action: "select-default-profile";
+        tool: "stage_demo_session";
+        waitInput: null;
+        defaultProfileId: "asymmetric-hearing-loss";
+        doNotEndTurn: true;
+      }>)
+  | (AgentContinuationBase &
+      Readonly<{
+        action: "explain-profiles-then-wait";
+        tool: "wait_for_session_change";
+        waitInput: AgentWaitInput<15_000>;
+        defaultProfileId: "asymmetric-hearing-loss";
+        doNotEndTurn: true;
+      }>)
+  | (AgentContinuationBase &
+      Readonly<{
+        action: "explain-then-wait" | "ask-then-wait";
+        tool: "wait_for_session_change";
+        waitInput: AgentWaitInput<60_000>;
+        defaultProfileId: null;
+        doNotEndTurn: true;
+      }>)
+  | (AgentContinuationBase &
+      Readonly<{
+        action: "stop";
+        tool: null;
+        waitInput: null;
+        defaultProfileId: null;
+        doNotEndTurn: false;
+      }>);
+
 export type GetAuralisStateData = Readonly<{
   capabilities: Readonly<{
     maxAdaptiveComparisons: 2;
@@ -520,6 +581,7 @@ type AuralisToolSuccess<T> = Readonly<{
   replayed: boolean;
   allowedNextTools: readonly AuralisToolName[];
   humanGate: HumanGateProjection | null;
+  continuation: AgentContinuationProjection;
   data: T;
   error: null;
 }>;
@@ -535,6 +597,7 @@ type AuralisToolError = Readonly<{
   replayed: false;
   allowedNextTools: readonly AuralisToolName[];
   humanGate: HumanGateProjection | null;
+  continuation: AgentContinuationProjection;
   data: null;
   error: AuralisToolFailure;
 }>;
@@ -648,6 +711,89 @@ export const humanGateProjectionSchema = z
     controlChannels: z.array(z.enum(CONTROL_CHANNELS)).length(3),
   })
   .strict();
+
+const continuationBaseSchema = {
+  policy: z.literal("continue-current-agent-run"),
+  instruction: z.string().min(1),
+} as const;
+
+function continuationWaitInputSchema(timeoutMs: 15_000 | 60_000) {
+  return z
+    .object({
+      sessionId: sessionIdSchema,
+      afterRevision: expectedRevisionSchema,
+      timeoutMs: z.literal(timeoutMs),
+    })
+    .strict();
+}
+
+export const agentContinuationProjectionSchema = z.discriminatedUnion(
+  "action",
+  [
+    z
+      .object({
+        ...continuationBaseSchema,
+        action: z.literal("call-tool"),
+        tool: z.enum(AURALIS_TOOL_NAMES),
+        waitInput: z.null(),
+        defaultProfileId: z.null(),
+        doNotEndTurn: z.literal(true),
+      })
+      .strict(),
+    z
+      .object({
+        ...continuationBaseSchema,
+        action: z.literal("select-default-profile"),
+        tool: z.literal("stage_demo_session"),
+        waitInput: z.null(),
+        defaultProfileId: z.literal("asymmetric-hearing-loss"),
+        doNotEndTurn: z.literal(true),
+      })
+      .strict(),
+    z
+      .object({
+        ...continuationBaseSchema,
+        action: z.literal("explain-profiles-then-wait"),
+        tool: z.literal("wait_for_session_change"),
+        waitInput: continuationWaitInputSchema(
+          AURALIS_WEBMCP_PROFILE_OVERRIDE_TIMEOUT_MS,
+        ),
+        defaultProfileId: z.literal("asymmetric-hearing-loss"),
+        doNotEndTurn: z.literal(true),
+      })
+      .strict(),
+    z
+      .object({
+        ...continuationBaseSchema,
+        action: z.literal("explain-then-wait"),
+        tool: z.literal("wait_for_session_change"),
+        waitInput: continuationWaitInputSchema(AURALIS_WEBMCP_WAIT_TIMEOUT_MS),
+        defaultProfileId: z.null(),
+        doNotEndTurn: z.literal(true),
+      })
+      .strict(),
+    z
+      .object({
+        ...continuationBaseSchema,
+        action: z.literal("ask-then-wait"),
+        tool: z.literal("wait_for_session_change"),
+        waitInput: continuationWaitInputSchema(AURALIS_WEBMCP_WAIT_TIMEOUT_MS),
+        defaultProfileId: z.null(),
+        doNotEndTurn: z.literal(true),
+      })
+      .strict(),
+    z
+      .object({
+        ...continuationBaseSchema,
+        action: z.literal("stop"),
+        tool: z.null(),
+        waitInput: z.null(),
+        defaultProfileId: z.null(),
+        doNotEndTurn: z.literal(false),
+      })
+      .strict(),
+  ],
+);
 
 export const sessionEvidenceEventSchema = z
   .object({
@@ -856,6 +1002,7 @@ export function auralisToolResultSchema<T extends z.ZodType>(dataSchema: T) {
     sessionId: sessionIdSchema.nullable(),
     allowedNextTools: z.array(z.enum(AURALIS_TOOL_NAMES)),
     humanGate: humanGateProjectionSchema.nullable(),
+    continuation: agentContinuationProjectionSchema,
   } as const;
 
   return z.discriminatedUnion("ok", [

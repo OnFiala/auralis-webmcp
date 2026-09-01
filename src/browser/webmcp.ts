@@ -92,7 +92,7 @@ type ToolMetadata = Readonly<{
 }>;
 
 const WEBMCP_FIRST_INSTRUCTION =
-  "When a matching tool appears in allowedNextTools, use that WebMCP tool before Computer Use. Computer Use is fallback-only for an explicit visible human gate after approval, or when no matching WebMCP tool is allowed; never click to imitate an equivalent tool.";
+  "Treat continuation as the current session-driver instruction. When continuation.doNotEndTurn is true, perform its narration and tool call in this same agent run before returning a final response. When a matching tool appears in allowedNextTools, use that WebMCP tool before Computer Use. Computer Use is fallback-only for an explicit visible human gate after approval, or when no matching WebMCP tool is allowed; never click to imitate an equivalent tool.";
 
 const TOOL_METADATA: Readonly<Record<AuralisToolName, ToolMetadata>> =
   Object.freeze({
@@ -147,7 +147,7 @@ const TOOL_METADATA: Readonly<Record<AuralisToolName, ToolMetadata>> =
     wait_for_session_change: Object.freeze({
       title: "Wait for Auralis session change",
       description:
-        "Wait read-only for the current session revision to change only when this tool appears in allowedNextTools after the agent has handed a step to the person or expects a technical page transition. If it is absent, follow the current allowedNextTools because a deterministic agent action is ready or the session is complete. A timeout is not a state change and is never a reason to switch to Computer Use; read the returned state and wait again only when human or page progress is still expected.",
+        "Wait read-only for the current session revision to change only when this tool appears in allowedNextTools after the agent has handed a step to the person or expects a technical page transition. Use the exact sessionId, afterRevision, and timeoutMs from continuation.waitInput. The normal human or technical wait is 60000 ms; 15000 ms is reserved only for the explicit profile override window. If wait is absent, follow the current allowedNextTools because a deterministic agent action is ready or the session is complete. A timeout is not a state change; follow the returned continuation and never switch to Computer Use merely because time elapsed.",
       readOnly: true,
       inputSchema: waitForSessionChangeInputSchema,
       dataSchema: waitForSessionChangeDataSchema,
@@ -211,6 +211,7 @@ function safeFailure(
     replayed: false as const,
     allowedNextTools: context.allowedNextTools,
     humanGate: context.humanGate,
+    continuation: context.continuation,
     data: null,
     error: Object.freeze({ code, ...FAILURE_DETAILS[code] }),
   });

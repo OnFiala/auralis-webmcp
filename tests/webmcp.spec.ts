@@ -8,6 +8,17 @@ type ToolResult = Readonly<{
   revision: number;
   sessionId?: string | null;
   allowedNextTools?: readonly string[];
+  continuation?: Readonly<{
+    action: string;
+    tool: string | null;
+    waitInput: Readonly<{
+      sessionId: string;
+      afterRevision: number;
+      timeoutMs: 15_000 | 60_000;
+    }> | null;
+    defaultProfileId: string | null;
+    doNotEndTurn: boolean;
+  }>;
   replayed?: boolean;
   data?: Record<string, unknown> | null;
   error?: Readonly<{ code: string }> | null;
@@ -226,12 +237,22 @@ test("a pending read-only wait resolves when the person advances the visible con
     revision: 1,
     sessionId: expect.any(String),
     allowedNextTools: expect.arrayContaining(["wait_for_session_change"]),
+    continuation: {
+      action: "explain-then-wait",
+      tool: "wait_for_session_change",
+      waitInput: {
+        sessionId: expect.any(String),
+        afterRevision: 1,
+        timeoutMs: 60_000,
+      },
+      defaultProfileId: null,
+      doNotEndTurn: true,
+    },
   });
 
-  const pending = callTool(page, "wait_for_session_change", {
-    sessionId: staged.sessionId,
-    afterRevision: staged.revision,
-  });
+  const waitInput = staged.continuation?.waitInput;
+  expect(waitInput).not.toBeNull();
+  const pending = callTool(page, "wait_for_session_change", waitInput);
   await page.getByRole("button", { name: "I understand and consent" }).click();
 
   await expect(pending).resolves.toMatchObject({
@@ -245,6 +266,17 @@ test("a pending read-only wait resolves when the person advances the visible con
           lastEvent: { action: "consent_confirmed" },
         },
       },
+    },
+    continuation: {
+      action: "explain-profiles-then-wait",
+      tool: "wait_for_session_change",
+      waitInput: {
+        sessionId: staged.sessionId,
+        afterRevision: 2,
+        timeoutMs: 15_000,
+      },
+      defaultProfileId: "asymmetric-hearing-loss",
+      doNotEndTurn: true,
     },
   });
 });

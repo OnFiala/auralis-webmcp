@@ -6,6 +6,8 @@ import {
   AURALIS_WEBMCP_MAX_ADAPTATIONS,
   AURALIS_WEBMCP_MAX_PLAYBACK_RUNS_PER_COMPARISON,
   AURALIS_WEBMCP_MAX_REVISION,
+  AURALIS_WEBMCP_PROFILE_OVERRIDE_TIMEOUT_MS,
+  AURALIS_WEBMCP_WAIT_TIMEOUT_MS,
   COMPARISON_IDS,
   MASKING_SOURCES,
   OBSERVATION_IDS,
@@ -24,6 +26,7 @@ import {
   waitForSessionChangeInputSchema,
   type AuralisSettings,
   type AdaptationOptionProjection,
+  type AgentContinuationProjection,
   type AuralisToolErrorCode,
   type AuralisToolName,
   type AuralisToolResult,
@@ -74,7 +77,10 @@ const CONTROL_CHANNELS = Object.freeze([
   "voice-agent",
 ] as const);
 
-export const AURALIS_WEBMCP_WAIT_TIMEOUT_MS = 60_000;
+export {
+  AURALIS_WEBMCP_PROFILE_OVERRIDE_TIMEOUT_MS,
+  AURALIS_WEBMCP_WAIT_TIMEOUT_MS,
+} from "../contracts/webmcp";
 
 const PROFILE_COPY: Readonly<
   Record<ProfileId, Readonly<{ everydayDescription: string; demonstrates: string }>>
@@ -456,7 +462,164 @@ function allowedNextToolsForState(
   return Object.freeze(always);
 }
 
-function toolContext(state: ExperienceState) {
+function standardWaitContinuation(
+  state: ExperienceState,
+  action: "ask-then-wait" | "explain-then-wait",
+  instruction: string,
+): AgentContinuationProjection {
+  const sessionId = state.webMcp.session?.sessionId;
+  if (!sessionId) {
+    return agentContinuationForState(state);
+  }
+  return Object.freeze({
+    policy: "continue-current-agent-run" as const,
+    action,
+    instruction,
+    tool: "wait_for_session_change" as const,
+    waitInput: Object.freeze({
+      sessionId,
+      afterRevision: state.webMcp.revision,
+      timeoutMs: AURALIS_WEBMCP_WAIT_TIMEOUT_MS,
+    }),
+    defaultProfileId: null,
+    doNotEndTurn: true,
+  });
+}
+
+function profileWaitContinuation(
+  state: ExperienceState,
+  instruction: string,
+): AgentContinuationProjection {
+  const sessionId = state.webMcp.session?.sessionId;
+  if (!sessionId) {
+    return agentContinuationForState(state);
+  }
+  return Object.freeze({
+    policy: "continue-current-agent-run" as const,
+    action: "explain-profiles-then-wait" as const,
+    instruction,
+    tool: "wait_for_session_change" as const,
+    waitInput: Object.freeze({
+      sessionId,
+      afterRevision: state.webMcp.revision,
+      timeoutMs: AURALIS_WEBMCP_PROFILE_OVERRIDE_TIMEOUT_MS,
+    }),
+    defaultProfileId: "asymmetric-hearing-loss" as const,
+    doNotEndTurn: true,
+  });
+}
+
+function callToolContinuation(
+  tool: AuralisToolName,
+  instruction: string,
+): AgentContinuationProjection {
+  return Object.freeze({
+    policy: "continue-current-agent-run" as const,
+    action: "call-tool" as const,
+    instruction,
+    tool,
+    waitInput: null,
+    defaultProfileId: null,
+    doNotEndTurn: true,
+  });
+}
+
+function agentContinuationForState(
+  state: ExperienceState,
+): AgentContinuationProjection {
+  const phase = deriveAuralisWebMcpPhase(state);
+  switch (phase) {
+    case "awaiting_session_stage":
+      return callToolContinuation(
+        "stage_demo_session",
+        "Call stage_demo_session with action start for the family-understanding goal. Do not end the agent run after activation; follow the continuation returned by that call.",
+      );
+    case "awaiting_consent":
+      return standardWaitContinuation(
+        state,
+        "explain-then-wait",
+        "Briefly explain the illustrative, non-diagnostic purpose and the visible consent control. Then call wait_for_session_change with the exact waitInput before ending this turn. A timeout is not consent; if the person is still deciding, remind them briefly and wait again.",
+      );
+    case "awaiting_profile_selection":
+      return profileWaitContinuation(
+        state,
+        "Explain all three profiles only from availableProfiles. Recommend asymmetric-hearing-loss for this demo because its left-right contrast gives the clearest family-scene illustration, never as an inference about the person. Say that the person has 15 seconds to choose another profile by click, text, or voice, then call wait_for_session_change with the exact waitInput. If the wait changes, honor the selected profile. If it times out, immediately follow the returned continuation to select the asymmetric default.",
+      );
+    case "awaiting_scene_load":
+      return standardWaitContinuation(
+        state,
+        "explain-then-wait",
+        state.source.status === "failed"
+          ? "Explain that only preparation of the fixed family scene failed and that the selected profile and session are preserved. Ask the person to use the visible Retry scene preparation control, then call wait_for_session_change with the exact waitInput. Do not use Computer Use to imitate that human retry."
+          : "Tell the person that Auralis is loading the fixed family scene automatically, then call wait_for_session_change with the exact waitInput. Do not ask for a manual load action and do not end the turn while the technical transition is pending.",
+      );
+    case "awaiting_volume_acknowledgement":
+      return standardWaitContinuation(
+        state,
+        "explain-then-wait",
+        "Explain the visible comfortable-listening-volume acknowledgement and the separate optional agent-playback grant. The person must make this physical safety decision. Then call wait_for_session_change with the exact waitInput before ending the turn.",
+      );
+    case "ready_for_baseline":
+      return callToolContinuation(
+        "prepare_comparison",
+        "Call prepare_comparison for the baseline at the current revision, explain what A and B represent from the returned Auralis data, and continue with the next returned directive.",
+      );
+    case "awaiting_baseline_listening":
+    case "awaiting_comparison_listening":
+      return state.agentPlaybackGranted
+        ? callToolContinuation(
+            "play_listening_comparison",
+            "Use play_listening_comparison for the current comparison. Prefer reference-then-simulated with important-speaker focus when both perspectives remain unheard. Explain the timed A/B sequence from Auralis narration and continue after natural playback completion.",
+          )
+        : standardWaitContinuation(
+            state,
+            "explain-then-wait",
+            "Explain that playback remains a direct human action because agent playback was not granted. Ask the person to use the visible A/B controls, then call wait_for_session_change with the exact waitInput.",
+          );
+    case "awaiting_baseline_observation":
+    case "awaiting_comparison_observation":
+      return standardWaitContinuation(
+        state,
+        "ask-then-wait",
+        "Ask what the person noticed in everyday language. If their answer is already present in the current message, translate only that answer and call record_user_observation. Otherwise call wait_for_session_change with the exact waitInput after asking; do not require enum wording.",
+      );
+    case "ready_for_adaptation":
+      return callToolContinuation(
+        "prepare_comparison",
+        "Explain the currently available adaptations from Auralis and use the person's stated preference when present. Otherwise start with television off for the clearest environmental change, then continue with the returned directive.",
+      );
+    case "complete":
+      return Object.freeze({
+        policy: "continue-current-agent-run" as const,
+        action: "stop" as const,
+        instruction:
+          "Present the deterministic Auralis summary and limitation. The guided session is complete; do not call another progression tool.",
+        tool: null,
+        waitInput: null,
+        defaultProfileId: null,
+        doNotEndTurn: false,
+      });
+  }
+}
+
+function profileTimeoutContinuation(
+  state: ExperienceState,
+): AgentContinuationProjection {
+  return Object.freeze({
+    policy: "continue-current-agent-run" as const,
+    action: "select-default-profile" as const,
+    instruction: `The 15-second profile choice window ended without a revision change. Call stage_demo_session now with action select-profile, goal family-understanding, profileId asymmetric-hearing-loss, expectedRevision ${state.webMcp.revision}, and a fresh requestId. If the call reports STALE_REVISION, read current state and honor the person's selection instead.`,
+    tool: "stage_demo_session" as const,
+    waitInput: null,
+    defaultProfileId: "asymmetric-hearing-loss" as const,
+    doNotEndTurn: true,
+  });
+}
+
+function toolContext(
+  state: ExperienceState,
+  continuation: AgentContinuationProjection = agentContinuationForState(state),
+) {
   const phase = deriveAuralisWebMcpPhase(state);
   return Object.freeze({
     revision: state.webMcp.revision,
@@ -464,6 +627,7 @@ function toolContext(state: ExperienceState) {
     sessionId: state.webMcp.session?.sessionId ?? null,
     allowedNextTools: allowedNextToolsForState(state),
     humanGate: humanGateForPhase(phase),
+    continuation,
   });
 }
 
@@ -473,13 +637,14 @@ function successResult<T>(
   state: ExperienceState,
   data: T,
   replayed = false,
+  continuation?: AgentContinuationProjection,
 ): AuralisToolResult<T> {
   return Object.freeze({
     contractVersion: AURALIS_WEBMCP_CONTRACT_VERSION,
     ok: true as const,
     tool,
     requestId,
-    ...toolContext(state),
+    ...toolContext(state, continuation),
     replayed,
     data,
     error: null,
@@ -912,6 +1077,7 @@ function waitDecisionForSnapshot(
 function waitSuccess(
   state: ExperienceState,
   reason: WaitForSessionChangeData["reason"],
+  input: WaitForSessionChangeInput,
 ): AuralisToolResult<WaitForSessionChangeData> {
   const data = Object.freeze({
     reason,
@@ -922,6 +1088,12 @@ function waitSuccess(
     null,
     state,
     data,
+    false,
+    reason === "timeout" &&
+      input.timeoutMs === AURALIS_WEBMCP_PROFILE_OVERRIDE_TIMEOUT_MS &&
+      deriveAuralisWebMcpPhase(state) === "awaiting_profile_selection"
+      ? profileTimeoutContinuation(state)
+      : undefined,
   );
   return validateResult(
     "wait_for_session_change",
@@ -967,12 +1139,27 @@ export async function waitForSessionChange(
     );
   }
   if (initialDecision?.kind === "success") {
-    return waitSuccess(initial, initialDecision.reason);
+    return waitSuccess(initial, initialDecision.reason, input);
+  }
+  const initialPhase = deriveAuralisWebMcpPhase(initial);
+  const canonicalTimeoutMs =
+    initialPhase === "awaiting_profile_selection"
+      ? AURALIS_WEBMCP_PROFILE_OVERRIDE_TIMEOUT_MS
+      : AURALIS_WEBMCP_WAIT_TIMEOUT_MS;
+  if (
+    (input.timeoutMs ?? AURALIS_WEBMCP_WAIT_TIMEOUT_MS) !== canonicalTimeoutMs
+  ) {
+    return errorResult(
+      "wait_for_session_change",
+      null,
+      initial,
+      "INVALID_PHASE",
+    );
   }
   if (
     !shouldOfferSessionWait(
       initial,
-      deriveAuralisWebMcpPhase(initial),
+      initialPhase,
     )
   ) {
     return errorResult(
@@ -1024,7 +1211,7 @@ export async function waitForSessionChange(
               state,
               decision.code,
             )
-          : waitSuccess(state, decision.reason),
+          : waitSuccess(state, decision.reason, input),
       );
       return true;
     };
@@ -1050,9 +1237,9 @@ export async function waitForSessionChange(
     timer = setTimeout(() => {
       const current = controller.getSnapshot();
       if (!settleFromSnapshot(current)) {
-        settle(waitSuccess(current, "timeout"));
+        settle(waitSuccess(current, "timeout", input));
       }
-    }, AURALIS_WEBMCP_WAIT_TIMEOUT_MS);
+    }, input.timeoutMs ?? AURALIS_WEBMCP_WAIT_TIMEOUT_MS);
   });
 }
 

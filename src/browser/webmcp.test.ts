@@ -43,7 +43,7 @@ import {
 
 const source = readFileSync(new URL("./webmcp.ts", import.meta.url), "utf8");
 const EXPECTED_WEBMCP_FIRST_INSTRUCTION =
-  "When a matching tool appears in allowedNextTools, use that WebMCP tool before Computer Use. Computer Use is fallback-only for an explicit visible human gate after approval, or when no matching WebMCP tool is allowed; never click to imitate an equivalent tool.";
+  "Treat continuation as the current session-driver instruction. When continuation.doNotEndTurn is true, perform its narration and tool call in this same agent run before returning a final response. When a matching tool appears in allowedNextTools, use that WebMCP tool before Computer Use. Computer Use is fallback-only for an explicit visible human gate after approval, or when no matching WebMCP tool is allowed; never click to imitate an equivalent tool.";
 
 function topLevelView() {
   const view: { top: unknown; self: unknown } = { top: null, self: null };
@@ -178,7 +178,7 @@ describe("Auralis WebMCP browser adapter", () => {
     binding.dispose();
   });
 
-  it("registers the exact seven v1.6 names, metadata, schemas and annotations", () => {
+  it("registers the exact seven v1.7 names, metadata, schemas and annotations", () => {
     const tools = createAuralisWebMcpTools(createExperienceController());
     const expected = {
       get_auralis_state: [
@@ -219,7 +219,7 @@ describe("Auralis WebMCP browser adapter", () => {
       ],
       wait_for_session_change: [
         "Wait for Auralis session change",
-        "Wait read-only for the current session revision to change only when this tool appears in allowedNextTools after the agent has handed a step to the person or expects a technical page transition. If it is absent, follow the current allowedNextTools because a deterministic agent action is ready or the session is complete. A timeout is not a state change and is never a reason to switch to Computer Use; read the returned state and wait again only when human or page progress is still expected.",
+        "Wait read-only for the current session revision to change only when this tool appears in allowedNextTools after the agent has handed a step to the person or expects a technical page transition. Use the exact sessionId, afterRevision, and timeoutMs from continuation.waitInput. The normal human or technical wait is 60000 ms; 15000 ms is reserved only for the explicit profile override window. If wait is absent, follow the current allowedNextTools because a deterministic agent action is ready or the session is complete. A timeout is not a state change; follow the returned continuation and never switch to Computer Use merely because time elapsed.",
         true,
         waitForSessionChangeInputSchema,
       ],
