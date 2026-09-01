@@ -147,7 +147,7 @@ const TOOL_METADATA: Readonly<Record<AuralisToolName, ToolMetadata>> =
     wait_for_session_change: Object.freeze({
       title: "Wait for Auralis session change",
       description:
-        "Wait read-only for the current session revision to change after the agent has consciously handed a step to the person or expects a technical page transition. If a currently allowed action tool directly fulfills the person's instruction, use that tool instead of waiting. A timeout is not a state change and is never a reason to switch to Computer Use; read the returned state and wait again only when human or page progress is still expected.",
+        "Wait read-only for the current session revision to change only when this tool appears in allowedNextTools after the agent has handed a step to the person or expects a technical page transition. If it is absent, follow the current allowedNextTools because a deterministic agent action is ready or the session is complete. A timeout is not a state change and is never a reason to switch to Computer Use; read the returned state and wait again only when human or page progress is still expected.",
       readOnly: true,
       inputSchema: waitForSessionChangeInputSchema,
       dataSchema: waitForSessionChangeDataSchema,

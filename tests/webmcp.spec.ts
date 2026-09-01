@@ -411,6 +411,11 @@ test("a staged WebMCP session preserves human gates and completes through browse
   expect(ready).toMatchObject({
     ok: true,
     phase: "awaiting_baseline_listening",
+    allowedNextTools: [
+      "get_auralis_state",
+      "get_session_evidence",
+      "play_listening_comparison",
+    ],
     data: {
       audio: { agentPlaybackGranted: true },
       currentComparison: {

@@ -368,6 +368,73 @@ describe("Auralis WebMCP deterministic domain contract", () => {
     expect(base.getSnapshot()).toBe(before);
   });
 
+  it("rejects a fresh wait when deterministic baseline preparation is ready", async () => {
+    const base = readyController();
+    const subscribe = vi.fn(base.subscribe);
+    const controller: ExperienceController = Object.freeze({
+      getSnapshot: base.getSnapshot,
+      commit: base.commit,
+      subscribe,
+    });
+    const revision = base.getSnapshot().webMcp.revision;
+
+    await expect(
+      waitForSessionChange(controller, {
+        sessionId: SESSION_ID,
+        afterRevision: revision,
+      }),
+    ).resolves.toMatchObject({
+      ok: false,
+      phase: "ready_for_baseline",
+      allowedNextTools: [
+        "get_auralis_state",
+        "get_session_evidence",
+        "prepare_comparison",
+      ],
+      error: { code: "INVALID_PHASE" },
+    });
+    expect(subscribe).not.toHaveBeenCalled();
+
+    await expect(
+      waitForSessionChange(controller, {
+        sessionId: SESSION_ID,
+        afterRevision: revision - 1,
+      }),
+    ).resolves.toMatchObject({
+      ok: true,
+      phase: "ready_for_baseline",
+      data: { reason: "changed" },
+    });
+    expect(subscribe).not.toHaveBeenCalled();
+  });
+
+  it("rejects a fresh wait when granted playback is the next action", async () => {
+    const base = atomicListeningController(true);
+    const subscribe = vi.fn(base.subscribe);
+    const controller: ExperienceController = Object.freeze({
+      getSnapshot: base.getSnapshot,
+      commit: base.commit,
+      subscribe,
+    });
+
+    await expect(
+      waitForSessionChange(controller, {
+        sessionId: SESSION_ID,
+        afterRevision: base.getSnapshot().webMcp.revision,
+      }),
+    ).resolves.toMatchObject({
+      ok: false,
+      phase: "awaiting_baseline_listening",
+      allowedNextTools: [
+        "get_auralis_state",
+        "get_session_evidence",
+        "play_listening_comparison",
+      ],
+      error: { code: "INVALID_PHASE" },
+    });
+    expect(subscribe).not.toHaveBeenCalled();
+  });
+
   it("closes the missed-wakeup gap between the first read and subscription", async () => {
     const base = createExperienceController();
     expect(stage(base).ok).toBe(true);
@@ -596,47 +663,105 @@ describe("Auralis WebMCP deterministic domain contract", () => {
     expect(activeSubscriptions).toBe(0);
   });
 
-  it("offers wait last throughout active progression and removes it at completion", () => {
-    const controller = readyController();
-    const expectWaitLast = () => {
-      const state = getAuralisState(controller);
-      expect(state.ok).toBe(true);
-      expect(state.allowedNextTools.at(-1)).toBe("wait_for_session_change");
-    };
-
-    expectWaitLast();
-    expect(prepareBaseline(controller, "wait-order-baseline").ok).toBe(true);
-    expectWaitLast();
-    play(controller, "reference");
-    expectWaitLast();
-    play(controller, "simulated");
-    expectWaitLast();
-    expect(observe(controller, "wait-order-observe-1", "comparison-1").ok).toBe(
-      true,
-    );
-    expectWaitLast();
-    expect(
-      prepareAdaptation(
-        controller,
-        "wait-order-adaptation",
-        "television_state",
-        "tv-off",
-      ).ok,
-    ).toBe(true);
-    expectWaitLast();
-    play(controller, "simulated");
-    expectWaitLast();
-    expect(
-      observe(controller, "wait-order-observe-2", "comparison-2", {
-        relativeToPrevious: "better",
-        nextAction: "summarize",
-      }).ok,
-    ).toBe(true);
-
+  it("offers wait for human or automatic progress but not deterministic baseline preparation", () => {
+    const controller = createExperienceController();
+    expect(stage(controller).ok).toBe(true);
     expect(getAuralisState(controller).allowedNextTools).toEqual([
       "get_auralis_state",
       "get_session_evidence",
+      "wait_for_session_change",
     ]);
+
+    expect(confirmWebMcpConsent(controller).ok).toBe(true);
+    expect(getAuralisState(controller).allowedNextTools).toEqual([
+      "get_auralis_state",
+      "get_session_evidence",
+      "stage_demo_session",
+      "wait_for_session_change",
+    ]);
+
+    expect(selectProfileWithAgent(controller).ok).toBe(true);
+    expect(getAuralisState(controller).allowedNextTools).toEqual([
+      "get_auralis_state",
+      "get_session_evidence",
+      "wait_for_session_change",
+    ]);
+
+    commitHuman(controller, (state) =>
+      experienceReducer(state, { type: "source-load-started" }),
+    );
+    commitHuman(controller, (state) =>
+      experienceReducer(state, {
+        type: "source-ready",
+        sourceIdentity: SOURCE_IDENTITY,
+        sampleRate: 24_000,
+        frameCount: 1_536_000,
+        durationSeconds: 64,
+      }),
+    );
+    expect(getAuralisState(controller).allowedNextTools).toEqual([
+      "get_auralis_state",
+      "get_session_evidence",
+      "wait_for_session_change",
+    ]);
+
+    commitHuman(controller, (state) =>
+      experienceReducer(state, {
+        type: "low-volume-acknowledgement-changed",
+        acknowledged: true,
+      }),
+    );
+    expect(getAuralisState(controller).allowedNextTools).toEqual([
+      "get_auralis_state",
+      "get_session_evidence",
+      "prepare_comparison",
+    ]);
+  });
+
+  it("makes granted playback exclusive and keeps ungranted playback human-driven", () => {
+    const humanPlayback = atomicListeningController(false);
+    expect(getAuralisState(humanPlayback).allowedNextTools).toEqual([
+      "get_auralis_state",
+      "get_session_evidence",
+      "wait_for_session_change",
+    ]);
+
+    const agentPlayback = atomicListeningController(true);
+    expect(getAuralisState(agentPlayback).allowedNextTools).toEqual([
+      "get_auralis_state",
+      "get_session_evidence",
+      "play_listening_comparison",
+    ]);
+    play(agentPlayback, "reference");
+    expect(getAuralisState(agentPlayback).allowedNextTools).toEqual([
+      "get_auralis_state",
+      "get_session_evidence",
+      "play_listening_comparison",
+    ]);
+    play(agentPlayback, "simulated");
+    expect(getAuralisState(agentPlayback).allowedNextTools).toEqual([
+      "get_auralis_state",
+      "get_session_evidence",
+      "play_listening_comparison",
+      "record_user_observation",
+      "wait_for_session_change",
+    ]);
+    expect(
+      observe(
+        agentPlayback,
+        "shared-adaptation-choice",
+        "comparison-1",
+      ).ok,
+    ).toBe(true);
+    expect(getAuralisState(agentPlayback)).toMatchObject({
+      phase: "ready_for_adaptation",
+      allowedNextTools: [
+        "get_auralis_state",
+        "get_session_evidence",
+        "prepare_comparison",
+        "wait_for_session_change",
+      ],
+    });
   });
 
   it("blocks staging after semantic human progress and preserves it", () => {

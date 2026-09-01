@@ -402,6 +402,32 @@ function stageDemoSessionActionForState(
   return null;
 }
 
+function isPlaybackAvailablePhase(phase: AuralisWebMcpPhase): boolean {
+  return (
+    phase === "awaiting_baseline_listening" ||
+    phase === "awaiting_baseline_observation" ||
+    phase === "awaiting_comparison_listening" ||
+    phase === "awaiting_comparison_observation"
+  );
+}
+
+function isPendingPlaybackPhase(phase: AuralisWebMcpPhase): boolean {
+  return (
+    phase === "awaiting_baseline_listening" ||
+    phase === "awaiting_comparison_listening"
+  );
+}
+
+function shouldOfferSessionWait(
+  state: ExperienceState,
+  phase: AuralisWebMcpPhase,
+): boolean {
+  if (!state.webMcp.session || phase === "complete") return false;
+  if (phase === "ready_for_baseline") return false;
+  if (isPendingPlaybackPhase(phase) && state.agentPlaybackGranted) return false;
+  return true;
+}
+
 function allowedNextToolsForState(
   state: ExperienceState,
 ): readonly AuralisToolName[] {
@@ -415,12 +441,7 @@ function allowedNextToolsForState(
   } else if (phase === "ready_for_baseline" || phase === "ready_for_adaptation") {
     always.push("prepare_comparison");
   }
-  if (
-    phase === "awaiting_baseline_listening" ||
-    phase === "awaiting_baseline_observation" ||
-    phase === "awaiting_comparison_listening" ||
-    phase === "awaiting_comparison_observation"
-  ) {
+  if (isPlaybackAvailablePhase(phase) && state.agentPlaybackGranted) {
     always.push("play_listening_comparison");
   }
   if (
@@ -429,7 +450,7 @@ function allowedNextToolsForState(
   ) {
     always.push("record_user_observation");
   }
-  if (state.webMcp.session && phase !== "complete") {
+  if (shouldOfferSessionWait(state, phase)) {
     always.push("wait_for_session_change");
   }
   return Object.freeze(always);
@@ -947,6 +968,19 @@ export async function waitForSessionChange(
   }
   if (initialDecision?.kind === "success") {
     return waitSuccess(initial, initialDecision.reason);
+  }
+  if (
+    !shouldOfferSessionWait(
+      initial,
+      deriveAuralisWebMcpPhase(initial),
+    )
+  ) {
+    return errorResult(
+      "wait_for_session_change",
+      null,
+      initial,
+      "INVALID_PHASE",
+    );
   }
 
   return new Promise((resolve) => {
