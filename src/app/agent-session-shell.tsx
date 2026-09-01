@@ -104,9 +104,9 @@ const phaseCopy: Record<
   },
   complete: {
     eyebrow: "Session complete",
-    heading: "Your comparison summary",
+    heading: "What you heard",
     detail:
-      "The final observation completed this browser-ephemeral session and its evidence.",
+      "Review your recorded observations, the purpose of the illustration, and clearly marked future directions.",
   },
 };
 

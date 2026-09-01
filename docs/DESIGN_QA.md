@@ -5,6 +5,28 @@ and support the current v1.6 candidate. Current contract and acceptance status
 remain authoritative in `docs/WEBMCP_PLAN.md`; paths below identify reproducible
 local QA outputs, not committed publication artifacts.
 
+## V1.9 terminal-summary refinement candidate
+
+The current owner direction removes the administrative report feel from the
+agent completion state. The proposed final surface has only three content
+groups: the person's bounded listening notes, the purpose and hard limitation
+of the synthetic A/B illustration, and clearly marked future Auralis
+directions. The previous comparison-fact grid, ordered session path, and
+browser-only conversation-guide download are intentionally absent.
+
+The future section contains general non-prescriptive correction information, a
+disabled audiologist locator with no location or network flow, and one static
+ImageGen ear-and-hearing-aid illustration. That image is not based on session
+data and is not presented as a hearing-aid fitting or predicted correction.
+Its provenance and pending owner review are recorded in the generated-media
+manifest.
+
+Acceptance requires the existing regular, wide-desktop, and mobile centering,
+overflow, contrast, focus, no-model-call, terminal evidence, and disabled
+locator checks. It additionally requires the three new headings, the static
+asset, and the absence of the removed report/download controls. Screenshots are
+local QA aids; publication remains blocked until owner visual review.
+
 ## V1.6 live-session continuity boundary
 
 V1.6 adds one read-only `wait_for_session_change` tool without changing the

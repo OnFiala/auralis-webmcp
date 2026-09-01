@@ -4946,6 +4946,113 @@ main[data-agent-phase="complete"] .agent-session-footer {
   opacity: 0.72;
 }
 
+.agent-summary-context {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  margin-top: 1.35rem;
+}
+
+.agent-summary-context span {
+  padding: 0.45rem 0.7rem;
+  border: 1px solid rgb(111 221 207 / 28%);
+  border-radius: 999px;
+  background: rgb(83 216 200 / 9%);
+  color: #d8efeb;
+  font-size: 0.72rem;
+  font-weight: 750;
+}
+
+.agent-summary-observation-section .agent-summary-observations {
+  grid-column: 2;
+}
+
+.agent-summary-purpose-copy {
+  grid-column: 2;
+  display: grid;
+  gap: 1rem;
+}
+
+.agent-summary-purpose-copy > p:first-child {
+  max-width: 58rem;
+  margin: 0;
+  color: #d8eae6;
+  font-size: 0.94rem;
+  line-height: 1.65;
+}
+
+.agent-summary-purpose-copy .agent-summary-hard-limitation {
+  grid-column: auto;
+  margin: 0;
+}
+
+.agent-summary-future-grid {
+  grid-column: 2;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.85rem;
+}
+
+.agent-summary-future-grid article {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 1.15rem;
+  overflow: hidden;
+  border: 1px solid rgb(111 221 207 / 22%);
+  border-radius: 1rem;
+  background: rgb(255 255 255 / 4%);
+}
+
+.agent-summary-future-grid h3 {
+  margin: 0;
+  color: #ffffff;
+  font-size: 1rem;
+  line-height: 1.25;
+}
+
+.agent-summary-future-grid article > p:not(.agent-summary-card-status),
+.agent-summary-hearing-tech-copy > p:not(.agent-summary-card-status) {
+  margin: 0.55rem 0 0;
+  color: #b8d0cb;
+  font-size: 0.82rem;
+  line-height: 1.55;
+}
+
+.agent-summary-hearing-tech-card {
+  grid-column: 1 / -1;
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) minmax(8.5rem, 12rem);
+  gap: 1.25rem;
+  align-items: center;
+  padding: 0.55rem 0.65rem 0.55rem 1.2rem !important;
+  background:
+    linear-gradient(100deg, rgb(15 73 65 / 66%), rgb(3 22 20 / 36%)),
+    rgb(255 255 255 / 4%) !important;
+}
+
+.agent-summary-hearing-tech-copy {
+  padding-block: 0.65rem;
+}
+
+.agent-summary-hearing-tech-card img {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1;
+  border-radius: 0.8rem;
+  object-fit: cover;
+}
+
+.agent-summary-future-grid button {
+  width: 100%;
+  min-height: 2.8rem;
+  margin-top: auto;
+  border-color: rgb(154 180 175 / 20%);
+  background: rgb(151 174 169 / 10%);
+  color: #718c87;
+  cursor: not-allowed;
+}
+
 main[data-agent-phase="ready_for_adaptation"] .agent-session-details,
 main[data-agent-phase="awaiting_comparison_listening"] .agent-session-details,
 main[data-agent-phase="awaiting_comparison_observation"] .agent-session-details {
@@ -5317,8 +5424,26 @@ main[data-agent-phase="awaiting_comparison_observation"] .agent-session-details 
   .agent-summary-observation-note,
   .agent-summary-meaning-grid,
   .agent-summary-next-step-grid,
-  .agent-summary-hard-limitation {
+  .agent-summary-hard-limitation,
+  .agent-summary-observation-section .agent-summary-observations,
+  .agent-summary-purpose-copy,
+  .agent-summary-future-grid {
     grid-column: 1;
+  }
+
+  .agent-summary-future-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .agent-summary-hearing-tech-card {
+    grid-column: 1;
+    grid-template-columns: 1fr;
+    padding: 1rem !important;
+  }
+
+  .agent-summary-hearing-tech-card img {
+    width: min(100%, 9rem);
+    justify-self: end;
   }
 
   .agent-summary-facts,

@@ -1,6 +1,6 @@
 # ADR 0015: Automatic terminal summary after the final observation
 
-- **Status:** Accepted for the local WebMCP v1.5 candidate
+- **Status:** Accepted in v1.5; presentation refined in the local v1.9 candidate
 - **Scope:** Agent-guided browser session only
 
 ## Context
@@ -21,7 +21,9 @@ The final valid observation atomically:
 
 The public contract is bumped to `auralis-webmcp-v1.5` and evidence to `auralis-webmcp-evidence-v4`. The unreachable `ready_for_summary` phase and `finish_session` gate are removed. Consent, comfortable-volume acknowledgement, the separate agent-playback grant, natural-playback proof, Stop, reset, replay recovery, revision checks, and request replay remain unchanged.
 
-The summary includes only bounded session evidence and general educational guidance. Its information download is created entirely in the browser and contains no session or personal data. The audiologist locator is a disabled placeholder with no location, search, booking, or external-provider integration.
+The summary includes only bounded session evidence and general educational guidance. The v1.9 presentation narrows it to three visible areas: what the person reported, what the illustration was for, and clearly marked future directions. The previous browser-only appointment download and administrative comparison/path grids are removed from the current surface by owner direction; this does not change the terminal state or evidence.
+
+The future hearing-technology card uses one static generated educational asset. It is not derived from the current session and does not simulate a device, fitting, correction result, or expected benefit. The asset has recorded provenance and remains pending owner visual approval. The audiologist locator stays a disabled placeholder with no location, search, booking, or external-provider integration. General correction information remains non-diagnostic and non-prescriptive.
 
 ## Rejected alternatives
 
@@ -31,4 +33,4 @@ The summary includes only bounded session evidence and general educational guida
 
 ## Rollback
 
-Revert the complete v1.5 candidate as one unit. Contract, reducer, UI, tests, and documentation must not be partially rolled back because the terminal phase and evidence schema are coupled.
+The v1.9 presentation refinement is an independent rollback unit because it changes only the summary component, complete-state shell copy, scoped CSS, a static generated asset and its manifest, tests, and documentation. Reverting that commit restores the previous v1.5 presentation without changing the `complete` phase or evidence v4. Reverting the original v1.5 terminal contract remains an atomic contract/reducer/UI operation.

@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useRef } from "react";
 
 import {
@@ -49,37 +50,9 @@ const relativeLabels = {
   not_compared: "the baseline observation",
 } as const;
 
-const HEARING_CONVERSATION_GUIDE = `Auralis — conversation guide for a hearing appointment
-
-This guide is general information. It is not a diagnosis, test result, prescription, or treatment recommendation.
-
-Before an appointment, you may want to note:
-- situations where listening feels difficult;
-- whether the change was gradual, sudden, or fluctuating;
-- whether one or both ears seem affected;
-- any ear pain, discharge, ringing, dizziness, or recent noise exposure;
-- medicines and relevant health history to discuss with a qualified professional.
-
-Questions you can ask:
-- What kind of hearing assessment is appropriate?
-- What do the results mean in everyday listening situations?
-- Which communication strategies or assistive options could be considered?
-- What follow-up is recommended, and which warning signs need urgent care?
-
-If hearing changes suddenly or worsens rapidly, seek urgent medical care rather than relying on this guide.
-`;
-
-function comparisonConditions(comparison: ComparisonProjection): string {
-  return [
-    supportLabels[comparison.settings.supportMode],
-    televisionLabels[comparison.settings.televisionState],
-    speakerLabels[comparison.settings.speakerPosition],
-  ].join(" · ");
-}
-
 function comparisonChange(comparison: ComparisonProjection): string {
   if (comparison.kind === "baseline" || comparison.changedVariable === null) {
-    return "Fixed baseline — no adaptation";
+    return "Baseline A/B";
   }
   if (comparison.changedVariable === "support_mode") {
     return supportLabels[comparison.settings.supportMode];
@@ -97,28 +70,12 @@ function observationSummary(observation: ObservationProjection): string {
   return `${focusedSpeechLabels[observation.focusedSpeech]}; ${masking}; ${relativeLabels[observation.relativeToPrevious]}.`;
 }
 
-function downloadConversationGuide(): void {
-  const blob = new Blob([HEARING_CONVERSATION_GUIDE], {
-    type: "text/plain;charset=utf-8",
-  });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = "auralis-hearing-conversation-guide.txt";
-  anchor.click();
-  URL.revokeObjectURL(url);
-}
-
 export function AgentFinalSummary({
   session,
 }: Readonly<{ session: WebMcpSessionState }>) {
   const headingRef = useRef<HTMLHeadingElement | null>(null);
   const profile = AURALIS_PROFILE_PROJECTIONS.find(
     (candidate) => candidate.profileId === session.confirmedProfileId,
-  );
-  const current = session.comparisons.at(-1) ?? null;
-  const adaptations = session.comparisons.filter(
-    (comparison) => comparison.kind === "adaptation",
   );
 
   useEffect(() => {
@@ -132,163 +89,109 @@ export function AgentFinalSummary({
       aria-labelledby="agent-final-summary-heading"
     >
       <header className="agent-final-summary-hero">
-        <p className="agent-kicker">Session complete · deterministic summary</p>
-        <h1
-          id="agent-final-summary-heading"
-          ref={headingRef}
-          tabIndex={-1}
-        >
-          Your comparison summary
+        <p className="agent-kicker">Session complete · your observations</p>
+        <h1 id="agent-final-summary-heading" ref={headingRef} tabIndex={-1}>
+          What you heard
         </h1>
         <p>
-          You compared one fixed family moment from two listening perspectives,
-          tried bounded changes, and recorded only what you noticed.
+          Auralis records only the differences you described in this synthetic
+          family-scene comparison.
         </p>
+        <div className="agent-summary-context" aria-label="Session context">
+          <span>{profile?.displayName ?? "Synthetic demo profile"}</span>
+          <span>{session.comparisons.length} comparisons</span>
+          <span>{session.observations.length} observations</span>
+        </div>
       </header>
 
-      <section className="agent-summary-section" aria-labelledby="compared-heading">
+      <section
+        className="agent-summary-section agent-summary-observation-section"
+        aria-labelledby="noticed-heading"
+      >
         <div className="agent-summary-section-heading">
-          <p>01</p>
-          <h2 id="compared-heading">What you compared</h2>
-        </div>
-        <dl className="agent-summary-facts">
-          <div>
-            <dt>Demo profile</dt>
-            <dd>{profile?.displayName ?? "Synthetic demo profile"}</dd>
-          </div>
-          <div>
-            <dt>A · Source reference</dt>
-            <dd>Validated family scene without the selected profile applied</dd>
-          </div>
-          <div>
-            <dt>B · Illustrative result</dt>
-            <dd>The same scene and timeline with the synthetic profile applied</dd>
-          </div>
-          <div>
-            <dt>Final listening conditions</dt>
-            <dd>{current ? comparisonConditions(current) : "Unavailable"}</dd>
-          </div>
-        </dl>
-        {adaptations.length > 0 ? (
-          <div className="agent-summary-changes">
-            <h3>Changes tried in this session</h3>
-            <ol>
-              {adaptations.map((comparison) => (
-                <li key={comparison.comparisonId}>
-                  <span>{comparison.comparisonId.replace("comparison-", "")}</span>
-                  <strong>{comparisonChange(comparison)}</strong>
-                </li>
-              ))}
-            </ol>
-          </div>
-        ) : null}
-      </section>
-
-      <section className="agent-summary-section" aria-labelledby="noticed-heading">
-        <div className="agent-summary-section-heading">
-          <p>02</p>
-          <h2 id="noticed-heading">What you reported</h2>
+          <p>What you told Auralis</p>
+          <h2 id="noticed-heading">Your listening notes</h2>
         </div>
         <ol className="agent-summary-observations">
-          {session.observations.map((observation, index) => (
-            <li key={observation.observationId}>
-              <span>Observation {index + 1}</span>
-              <p>{observationSummary(observation)}</p>
-            </li>
-          ))}
+          {session.observations.map((observation, index) => {
+            const comparison = session.comparisons.find(
+              (candidate) =>
+                candidate.comparisonId === observation.comparisonId,
+            );
+            return (
+              <li key={observation.observationId}>
+                <span>
+                  {index + 1}. {comparison ? comparisonChange(comparison) : "Comparison"}
+                </span>
+                <p>{observationSummary(observation)}</p>
+              </li>
+            );
+          })}
         </ol>
         <p className="agent-summary-observation-note">
-          These entries restate the bounded choices recorded in this browser
-          session. Auralis does not infer a diagnosis from them.
+          These notes restate the bounded choices recorded in this browser
+          session. They are not an assessment of your hearing.
         </p>
       </section>
 
-      <section className="agent-summary-section" aria-labelledby="journey-heading">
+      <section
+        className="agent-summary-section agent-summary-purpose"
+        aria-labelledby="purpose-heading"
+      >
         <div className="agent-summary-section-heading">
-          <p>03</p>
-          <h2 id="journey-heading">Your session path</h2>
+          <p>Why you compared A and B</p>
+          <h2 id="purpose-heading">What the illustration was for</h2>
         </div>
-        <ol className="agent-summary-path">
-          {session.comparisons.map((comparison, index) => (
-            <li key={comparison.comparisonId}>
-              <span>{index + 1}</span>
-              <div>
-                <strong>
-                  {comparison.kind === "baseline"
-                    ? "Baseline A/B comparison"
-                    : comparisonChange(comparison)}
-                </strong>
-                <p>{comparisonConditions(comparison)}</p>
-              </div>
-            </li>
-          ))}
-        </ol>
+        <div className="agent-summary-purpose-copy">
+          <p>
+            A was the validated source scene. B kept the same people, words, and
+            timeline while applying a synthetic listening profile. The bounded
+            changes showed how television, distance, speaker position, or
+            illustrative support can alter what reaches a listener.
+          </p>
+          <p className="agent-summary-hard-limitation">
+            {AURALIS_WEBMCP_LIMITATION}
+          </p>
+        </div>
       </section>
 
       <section
-        className="agent-summary-section agent-summary-meaning"
-        aria-labelledby="meaning-heading"
+        className="agent-summary-section agent-summary-future"
+        aria-labelledby="future-heading"
       >
         <div className="agent-summary-section-heading">
-          <p>04</p>
-          <h2 id="meaning-heading">What this can—and cannot—show</h2>
+          <p>Clearly marked future functions</p>
+          <h2 id="future-heading">Future Auralis directions</h2>
         </div>
-        <div className="agent-summary-meaning-grid">
-          <div>
-            <h3>What it illustrates</h3>
-            <p>
-              Background sound, distance, speaker position, and listening
-              support can change how easily a voice reaches a listener in the
-              same moment.
-            </p>
-          </div>
-          <div>
-            <h3>What it cannot establish</h3>
-            <p>
-              This synthetic result is not a hearing test, diagnosis, hearing-aid
-              fitting, prescription, or prediction of one person&apos;s perception
-              or benefit.
-            </p>
-          </div>
-        </div>
-        <p className="agent-summary-hard-limitation">{AURALIS_WEBMCP_LIMITATION}</p>
-      </section>
-
-      <section
-        className="agent-summary-section agent-summary-next-steps"
-        aria-labelledby="next-steps-heading"
-      >
-        <div className="agent-summary-section-heading">
-          <p>05</p>
-          <h2 id="next-steps-heading">Next-step options</h2>
-        </div>
-        <div className="agent-summary-next-step-grid">
-          <article>
-            <p className="agent-summary-card-status">Available now</p>
-            <h3>Arrange a hearing assessment</h3>
-            <p>
-              If listening difficulties affect daily life, a qualified hearing
-              professional can assess hearing and explain appropriate options.
-              These may include communication strategies, captioning, assistive
-              devices, or hearing technology after assessment.
-            </p>
-            <p className="agent-summary-urgent-note">
-              Seek urgent medical care for sudden hearing loss or hearing that
-              worsens rapidly over days or weeks.
-            </p>
+        <div className="agent-summary-future-grid">
+          <article className="agent-summary-hearing-tech-card">
+            <div className="agent-summary-hearing-tech-copy">
+              <p className="agent-summary-card-status">Future illustration</p>
+              <h3>Hearing technology, explained visually</h3>
+              <p>
+                A future Auralis step may explain general hearing-technology
+                concepts after an assessment. This static illustration is not
+                based on your session and does not simulate a device, fitting,
+                or expected benefit.
+              </p>
+            </div>
+            <Image
+              src="/media/auralis-hearing-aid-education-v1.webp"
+              alt="Educational illustration of an ear wearing a behind-the-ear hearing aid"
+              width={1254}
+              height={1254}
+              sizes="(max-width: 700px) 38vw, 12rem"
+            />
           </article>
 
           <article>
-            <p className="agent-summary-card-status">Private client download</p>
-            <h3>Prepare for a conversation</h3>
+            <p className="agent-summary-card-status">General information</p>
+            <h3>Understanding correction options</h3>
             <p>
-              Download a general appointment guide. It is generated in this
-              browser, contains no session data, and sends nothing to Auralis or
-              another service.
+              After a qualified assessment, a hearing professional may discuss
+              communication strategies, assistive listening tools, or hearing
+              technology. Auralis does not select a device or predict benefit.
             </p>
-            <button type="button" onClick={downloadConversationGuide}>
-              Download conversation guide
-            </button>
           </article>
 
           <article className="agent-summary-disabled-card">

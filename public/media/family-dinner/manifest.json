@@ -32,7 +32,7 @@
   },
   "classification": "original synthetic generated media",
   "generatedAt": "2026-07-17T15:11:50.906529+00:00",
-  "lastUpdatedAt": "2026-07-17T16:58:18Z",
+  "lastUpdatedAt": "2026-09-01T20:16:13Z",
   "scene": {
     "title": "Greenhouse Plans After Dinner",
     "concept": "Three fictional adult relatives finish dinner while planning a Saturday repair of their neighborhood greenhouse. A fictional local evening-news bulletin and restrained kitchen-room ambience create competing but intelligible background sound.",
@@ -71,6 +71,34 @@
         "ownerReviewRequired": true,
         "ownerReviewCompleted": true,
         "ownerReviewCompletedAt": "2026-08-30",
+        "aiDisclosureRequired": true,
+        "aiDisclosureLocation": "this generated-media manifest"
+      }
+    },
+    {
+      "file": "../auralis-hearing-aid-education-v1.webp",
+      "role": "agent-session terminal educational illustration",
+      "sha256": "01470c23352d2e967459000459dcaa6fc16b61ff36d45b1e2ffd207e9ace70be",
+      "pixelDimensions": {
+        "width": 1254,
+        "height": 1254
+      },
+      "classification": "AI-generated static educational UI asset",
+      "sourceFile": "Codex built-in ImageGen output; source PNG is not part of the public package",
+      "generatedAt": "2026-09-01",
+      "generation": {
+        "tool": "Codex built-in ImageGen",
+        "runtimeModelIdEvidence": "not exposed by the Codex task host",
+        "requestedEdit": "Create a small supporting ear-with-hearing-aid illustration on a smooth deep dark teal editorial backdrop for the Auralis agent summary, with no text, logo, watermark, or product claim.",
+        "postProcessing": "Converted the generated 1254x1254 RGB PNG to WebP with cwebp 1.6.0 at quality 86; dimensions preserved and metadata removed."
+      },
+      "originAndRights": {
+        "thirdPartySource": "none",
+        "licenseBasis": "OpenAI-generated output, subject to applicable OpenAI terms.",
+        "copyrightGuaranteed": false,
+        "uniquenessGuaranteed": false,
+        "ownerReviewRequired": true,
+        "ownerReviewCompleted": false,
         "aiDisclosureRequired": true,
         "aiDisclosureLocation": "this generated-media manifest"
       }

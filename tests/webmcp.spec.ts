@@ -1,5 +1,3 @@
-import { readFile } from "node:fs/promises";
-
 import { expect, test, type Page } from "@playwright/test";
 
 type ToolResult = Readonly<{
@@ -869,7 +867,7 @@ test("a staged WebMCP session preserves human gates and completes through browse
       nextPhase: "complete",
     },
   });
-  await expect(page.getByRole("heading", { name: "Your comparison summary" })).toBeFocused();
+  await expect(page.getByRole("heading", { name: "What you heard" })).toBeFocused();
   await expect(
     page.getByRole("list", { name: "Agent-guided session progress" }).getByRole("listitem").nth(3),
   ).toHaveAttribute("aria-current", "step");
@@ -888,6 +886,25 @@ test("a staged WebMCP session preserves human gates and completes through browse
   ).toHaveCount(0);
   await expect(
     page.getByText("Optional GPT explanation", { exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("heading", { name: "Your listening notes" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "What the illustration was for" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Future Auralis directions" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("img", {
+      name: "Educational illustration of an ear wearing a behind-the-ear hearing aid",
+    }),
+  ).toHaveAttribute("src", /auralis-hearing-aid-education-v1/);
+  await expect(page.getByText("What you compared", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("Your session path", { exact: true })).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Download conversation guide" }),
   ).toHaveCount(0);
   if (process.env.AURALIS_SUMMARY_QA_CAPTURE) {
     await page.screenshot({
@@ -1095,26 +1112,6 @@ test("a staged WebMCP session preserves human gates and completes through browse
     });
   }
   expect(geometry.contrast).toBeGreaterThanOrEqual(4.5);
-
-  const downloadRequests: string[] = [];
-  page.on("request", (request) => downloadRequests.push(request.url()));
-  const downloadPromise = page.waitForEvent("download");
-  await page.getByRole("button", { name: "Download conversation guide" }).click();
-  const download = await downloadPromise;
-  expect(download.suggestedFilename()).toBe(
-    "auralis-hearing-conversation-guide.txt",
-  );
-  const downloadPath = await download.path();
-  expect(downloadPath).not.toBeNull();
-  const downloadText = await readFile(downloadPath!, "utf8");
-  expect(downloadText).toContain(
-    "This guide is general information. It is not a diagnosis",
-  );
-  expect(downloadText).not.toContain("High-frequency hearing loss");
-  expect(downloadText).not.toContain("comparison-2");
-  expect(downloadText).not.toContain("observation-2");
-  expect(downloadText).not.toContain("dB HL");
-  expect(downloadRequests).toHaveLength(0);
 
   const audiologistPlaceholder = page.getByRole("button", {
     name: "Find an audiologist near you",
