@@ -43,7 +43,7 @@ import {
 
 const source = readFileSync(new URL("./webmcp.ts", import.meta.url), "utf8");
 const EXPECTED_WEBMCP_FIRST_INSTRUCTION =
-  "Treat continuation as the current session-driver instruction. When continuation.doNotEndTurn is true, perform its required tool call in this same agent run before returning a final response. Follow any explicit silence instruction before adding narration. When a matching tool appears in allowedNextTools, use that WebMCP tool before Computer Use. Computer Use is fallback-only for an explicit visible human gate after approval, or when no matching WebMCP tool is allowed; never click to imitate an equivalent tool.";
+  "Treat continuation as the current session-driver instruction. Use the person's active communication channel for every required explanation: write it in text mode or speak it in voice mode. When continuation.doNotEndTurn is true, provide the required explanation and perform its required tool call in this same agent run before returning a final response. An explicit silence instruction overrides narration during the page-owned quiet lead-in and audio. When a matching tool appears in allowedNextTools, use that WebMCP tool before Computer Use. Computer Use is fallback-only for an explicit visible human gate after approval, or when no matching WebMCP tool is allowed; never click to imitate an equivalent tool.";
 
 function topLevelView() {
   const view: { top: unknown; self: unknown } = { top: null, self: null };
@@ -178,7 +178,7 @@ describe("Auralis WebMCP browser adapter", () => {
     binding.dispose();
   });
 
-  it("registers the exact seven v1.9 names, metadata, schemas and annotations", () => {
+  it("registers the exact seven v1.10 names, metadata, schemas and annotations", () => {
     const tools = createAuralisWebMcpTools(createExperienceController());
     const expected = {
       get_auralis_state: [
@@ -219,7 +219,7 @@ describe("Auralis WebMCP browser adapter", () => {
       ],
       wait_for_session_change: [
         "Wait for Auralis session change",
-        "Wait read-only for the current session revision to change only when this tool appears in allowedNextTools after the agent has handed a step to the person or expects a technical page transition. Use the exact sessionId, afterRevision, and timeoutMs from continuation.waitInput. If the host omits the optional timeoutMs, Auralis derives the same phase-bound value: 240000 ms for normal human or technical waits and 15000 ms only for the explicit profile override window. An explicitly mismatched duration fails closed. If wait is absent, follow the current allowedNextTools because a deterministic agent action is ready or the session is complete. A timeout is not a state change; follow the returned continuation and never switch to Computer Use merely because time elapsed.",
+        "Wait read-only for the current session revision to change only when this tool appears in allowedNextTools after the agent has explained the visible step in the person's active channel or expects a technical page transition. Write that explanation in text mode or speak it in voice mode before waiting. Use the exact sessionId, afterRevision, and timeoutMs from continuation.waitInput. If the host omits the optional timeoutMs, Auralis derives the same phase-bound value: 240000 ms for normal human or technical waits and 15000 ms only for the explicit profile override window. An explicitly mismatched duration fails closed. If wait is absent, follow the current allowedNextTools because a deterministic agent action is ready or the session is complete. A timeout is not a state change; follow the returned continuation and never switch to Computer Use merely because time elapsed.",
         true,
         waitForSessionChangeInputSchema,
       ],

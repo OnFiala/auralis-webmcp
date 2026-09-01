@@ -320,6 +320,12 @@ The terminal-summary refinement is presentation-only. It reads the same bounded 
 
 Rollback is split: revert the terminal-summary commit alone to restore the previous completion presentation, then revert `a514a4e` to restore V1.8 playback orchestration. No state or data downgrade is required.
 
+### V1.10 channel-aware guided-session refinement
+
+The migration verdict is **COMPATIBLE (instruction-only, pre-release)**. Tool names, input and output schemas, phases, human gates, evidence v4, state ownership, audio behavior, and persistence remain unchanged. Continuation and browser metadata now explicitly require every non-playback explanation in the person's active communication channel: written guidance in text mode or spoken guidance in voice mode. The V1.9 silence rule remains the stronger instruction during the page-owned quiet lead-in and pending audio call, so this repair cannot reintroduce narration over A or B.
+
+Rollback is one isolated V1.10 protocol commit over `2deac7f`; reverting it restores the exact V1.9 instructions without a state, evidence, audio, or data downgrade.
+
 ## Privacy, safety, and known limits
 
 - Profiles are predefined and synthetic; V1 does not require a personal audiogram.

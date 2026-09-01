@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const AURALIS_WEBMCP_CONTRACT_VERSION = "auralis-webmcp-v1.9" as const;
+export const AURALIS_WEBMCP_CONTRACT_VERSION = "auralis-webmcp-v1.10" as const;
 export const AURALIS_WEBMCP_EVIDENCE_SCHEMA_VERSION =
   "auralis-webmcp-evidence-v4" as const;
 export const AURALIS_WEBMCP_LIMITATION =

@@ -321,6 +321,9 @@ describe("Auralis WebMCP deterministic domain contract", () => {
       continuation: {
         policy: "continue-current-agent-run",
         action: "explain-then-wait",
+        instruction: expect.stringContaining(
+          "write it in text mode or speak it in voice mode",
+        ),
         tool: "wait_for_session_change",
         waitInput: {
           sessionId: SESSION_ID,
@@ -369,6 +372,9 @@ describe("Auralis WebMCP deterministic domain contract", () => {
         phase: "awaiting_profile_selection",
         continuation: {
           action: "explain-profiles-then-wait",
+          instruction: expect.stringContaining(
+            "write it in text mode or speak it in voice mode",
+          ),
           tool: "wait_for_session_change",
           waitInput: {
             sessionId: SESSION_ID,
@@ -450,6 +456,9 @@ describe("Auralis WebMCP deterministic domain contract", () => {
       data: { reason: "changed" },
       continuation: {
         action: "explain-then-wait",
+        instruction: expect.stringContaining(
+          "write it in text mode or speak it in voice mode",
+        ),
         tool: "wait_for_session_change",
         waitInput: {
           afterRevision: revision + 1,
@@ -1126,6 +1135,9 @@ describe("Auralis WebMCP deterministic domain contract", () => {
         doNotEndTurn: true,
       },
     });
+    expect(
+      getAuralisState(agentPlayback).continuation.instruction,
+    ).not.toContain("write it in text mode or speak it in voice mode");
     play(agentPlayback, "reference");
     expect(getAuralisState(agentPlayback).allowedNextTools).toEqual([
       "get_auralis_state",

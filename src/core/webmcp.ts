@@ -462,6 +462,13 @@ function allowedNextToolsForState(
   return Object.freeze(always);
 }
 
+const ACTIVE_CHANNEL_GUIDANCE =
+  "Use the person's active communication channel for this guidance: write it in text mode or speak it in voice mode. ";
+
+function activeChannelInstruction(instruction: string): string {
+  return `${ACTIVE_CHANNEL_GUIDANCE}${instruction}`;
+}
+
 function standardWaitContinuation(
   state: ExperienceState,
   action: "ask-then-wait" | "explain-then-wait",
@@ -474,7 +481,7 @@ function standardWaitContinuation(
   return Object.freeze({
     policy: "continue-current-agent-run" as const,
     action,
-    instruction,
+    instruction: activeChannelInstruction(instruction),
     tool: "wait_for_session_change" as const,
     waitInput: Object.freeze({
       sessionId,
@@ -497,7 +504,7 @@ function profileWaitContinuation(
   return Object.freeze({
     policy: "continue-current-agent-run" as const,
     action: "explain-profiles-then-wait" as const,
-    instruction,
+    instruction: activeChannelInstruction(instruction),
     tool: "wait_for_session_change" as const,
     waitInput: Object.freeze({
       sessionId,
@@ -562,7 +569,9 @@ function agentContinuationForState(
     case "ready_for_baseline":
       return callToolContinuation(
         "prepare_comparison",
-        "Call prepare_comparison for the baseline at the current revision, explain what A and B represent from the returned Auralis data, and continue with the next returned directive.",
+        activeChannelInstruction(
+          "Call prepare_comparison for the baseline at the current revision, explain what A and B represent from the returned Auralis data, and continue with the next returned directive.",
+        ),
       );
     case "awaiting_baseline_listening":
     case "awaiting_comparison_listening":
@@ -587,13 +596,17 @@ function agentContinuationForState(
       if (state.interventionState !== "tv-off") {
         return callToolContinuation(
           "prepare_comparison",
-          "Use an explicit preference from the person's current message when present. Otherwise briefly explain that the first preferred step removes only the television masking contribution, then call prepare_comparison with television_state set to tv-off and continue with the returned directive. Do not proactively choose speaker position or bilateral support.",
+          activeChannelInstruction(
+            "Use an explicit preference from the person's current message when present. Otherwise briefly explain that the first preferred step removes only the television masking contribution, then call prepare_comparison with television_state set to tv-off and continue with the returned directive. Do not proactively choose speaker position or bilateral support.",
+          ),
         );
       }
       if (state.supportMode === "none") {
         return callToolContinuation(
           "prepare_comparison",
-          "Use an explicit preference from the person's current message when present. Otherwise briefly explain that the second preferred step adds bounded left-ear illustrative support, then call prepare_comparison with support_mode set to left-one-sided and continue with the returned directive. Speaker position and bilateral support remain opt-in alternatives only when the person explicitly requests them.",
+          activeChannelInstruction(
+            "Use an explicit preference from the person's current message when present. Otherwise briefly explain that the second preferred step adds bounded left-ear illustrative support, then call prepare_comparison with support_mode set to left-one-sided and continue with the returned directive. Speaker position and bilateral support remain opt-in alternatives only when the person explicitly requests them.",
+          ),
         );
       }
       return standardWaitContinuation(
@@ -605,8 +618,9 @@ function agentContinuationForState(
       return Object.freeze({
         policy: "continue-current-agent-run" as const,
         action: "stop" as const,
-        instruction:
+        instruction: activeChannelInstruction(
           "Present the deterministic Auralis summary and limitation. The guided session is complete; do not call another progression tool.",
+        ),
         tool: null,
         waitInput: null,
         defaultProfileId: null,
