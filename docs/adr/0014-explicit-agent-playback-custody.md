@@ -1,6 +1,6 @@
 # ADR 0014: Explicit agent playback custody
 
-- **Status:** Accepted in v1.2 and retained by the local pre-release v1.4 candidate
+- **Status:** Accepted in v1.2; response timing amended by pre-release v1.8
 - **Date:** 2026-08-30
 - **Scope:** Agent-guided WebMCP listening only
 
@@ -14,7 +14,7 @@ The browser host does not provide a page-to-agent wake guarantee. Auralis theref
 
 Add `play_listening_comparison` as the sixth pre-release tool and require a separate visible, unchecked agent-playback grant during the comfortable-volume human gate. The acknowledgement and fixed baseline are one semantic commit. The tool reserves an idempotent `PlaybackRun` containing its request, comparison, sequence, focus, initiator, completed legs, and status.
 
-The browser page owns the verified audio runtime and timed visible guidance. A run may play A, B, or the fixed eight-second A-then-B sequence. At most three agent-started runs may be reserved per comparison. The first invocation returns only after the first leg actually starts, while the page continues the bounded sequence. The agent receives canonical before, between, after, and no-difference guidance in tool/state results, but Auralis does not claim a timed agent callback.
+The browser page owns the verified audio runtime and timed visible guidance. A run may play A, B, or the fixed eight-second A-then-B sequence. At most three agent-started runs may be reserved per comparison. V1.2 through V1.7 returned the first invocation after the first leg started while the page continued the sequence. V1.8 intentionally keeps that tool call pending until the whole sequence completes, fails, or the person presses Stop. This prevents the host from starting a new narration turn during active audio. The agent receives canonical pre-listening, visible between-leg, post-listening, and no-difference guidance, but Auralis does not claim a timed agent callback.
 
 Only natural media end marks a leg heard. Stop or reset cancels a `starting` or `started` run and invalidates delayed continuation, so B cannot start after cancellation. Active playback, pending playback, and every terminal callback must carry the same run ID; a stale mismatch is a complete no-op. Direct page playback remains available when the agent grant is off.
 
@@ -24,8 +24,8 @@ Adaptation choices are derived once in the core and projected to both WebMCP sta
 
 - The public tuple changes from five to six tools before release.
 - Contract, reducer, domain operation, browser port, UI, tests, and public documentation must move together.
-- The first WebMCP call returns after actual playback start with `replayed: false`; replaying the same request returns current or final status without starting audio again.
-- Evidence schema v2 introduced correlation of playback request, start, completion, cancellation, and failure with request and run IDs. The current evidence schema v3 retains that custody and adds the later capability/profile-set contract. It exports a minimized run descriptor (`playback`, `focus`, `purpose`, completed modes, status) plus bounded recovery counts. Canonical input, raw audiogram data, source identity, and free text remain excluded.
+- The first WebMCP call returns after the run reaches a terminal completed, cancelled, or failed state with `replayed: false`; replaying the same request returns that final status without starting audio again.
+- Evidence schema v2 introduced correlation of playback request, start, completion, cancellation, and failure with request and run IDs. The current evidence schema v4 retains that custody and adds the later capability/profile-set contract. It exports a minimized run descriptor (`playback`, `focus`, `purpose`, completed modes, status) plus bounded recovery counts. Canonical input, raw audiogram data, source identity, and free text remain excluded.
 - Native host discovery, voice control, and physical audible output remain separate runtime evidence from mocked Playwright verification.
 
 ## Rollback

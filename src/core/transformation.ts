@@ -9,8 +9,8 @@ import {
 } from "./profile";
 
 export const TRANSFORMATION_ALGORITHM_VERSION = "auralis-peaking-attenuation-v1";
-export const SOURCE_MIX_ALGORITHM_VERSION = "auralis-family-mix-v2";
-export const TELEVISION_MASKING_GAIN_DB = 6;
+export const SOURCE_MIX_ALGORITHM_VERSION = "auralis-family-mix-v3";
+export const TELEVISION_MASKING_GAIN_DB = 8;
 export const TELEVISION_MASKING_GAIN_LINEAR =
   10 ** (TELEVISION_MASKING_GAIN_DB / 20);
 export const SOURCE_MIX_HEADROOM_DB = -1.5;

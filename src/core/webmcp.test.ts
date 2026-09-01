@@ -325,7 +325,7 @@ describe("Auralis WebMCP deterministic domain contract", () => {
         waitInput: {
           sessionId: SESSION_ID,
           afterRevision: 1,
-          timeoutMs: 60_000,
+          timeoutMs: 240_000,
         },
         defaultProfileId: null,
         doNotEndTurn: true,
@@ -453,7 +453,7 @@ describe("Auralis WebMCP deterministic domain contract", () => {
         tool: "wait_for_session_change",
         waitInput: {
           afterRevision: revision + 1,
-          timeoutMs: 60_000,
+          timeoutMs: 240_000,
         },
         defaultProfileId: null,
       },
@@ -610,7 +610,7 @@ describe("Auralis WebMCP deterministic domain contract", () => {
     expect(base.getSnapshot()).toBe(before);
   });
 
-  it("rejects an explicit 60-second bound during profile selection", async () => {
+  it("rejects the legacy 60-second value and a four-minute bound during profile selection", async () => {
     const base = createExperienceController();
     expect(stage(base).ok).toBe(true);
     expect(confirmWebMcpConsent(base).changed).toBe(true);
@@ -626,6 +626,17 @@ describe("Auralis WebMCP deterministic domain contract", () => {
       waitForSessionChange(controller, {
         sessionId: SESSION_ID,
         afterRevision: 2,
+        timeoutMs: 60_000,
+      }),
+    ).resolves.toMatchObject({
+      ok: false,
+      phase: "awaiting_profile_selection",
+      error: { code: "INVALID_INPUT" },
+    });
+    await expect(
+      waitForSessionChange(controller, {
+        sessionId: SESSION_ID,
+        afterRevision: 2,
         timeoutMs: AURALIS_WEBMCP_WAIT_TIMEOUT_MS,
       }),
     ).resolves.toMatchObject({
@@ -637,7 +648,7 @@ describe("Auralis WebMCP deterministic domain contract", () => {
     expect(base.getSnapshot()).toBe(before);
   });
 
-  it("accepts the 60-second bound at the comfortable-volume gate", async () => {
+  it("accepts the four-minute bound at the comfortable-volume gate", async () => {
     const controller = createExperienceController();
     expect(stage(controller).ok).toBe(true);
     expect(confirmWebMcpConsent(controller).changed).toBe(true);
@@ -669,7 +680,7 @@ describe("Auralis WebMCP deterministic domain contract", () => {
       continuation: {
         action: "explain-then-wait",
         tool: "wait_for_session_change",
-        waitInput: { timeoutMs: 60_000 },
+        waitInput: { timeoutMs: 240_000 },
       },
     });
   });
@@ -695,7 +706,7 @@ describe("Auralis WebMCP deterministic domain contract", () => {
         action: "explain-then-wait",
         instruction: expect.stringContaining("visible Retry"),
         tool: "wait_for_session_change",
-        waitInput: { afterRevision: revision, timeoutMs: 60_000 },
+        waitInput: { afterRevision: revision, timeoutMs: 240_000 },
       },
     });
     const pending = waitForSessionChange(controller, {
@@ -829,10 +840,10 @@ describe("Auralis WebMCP deterministic domain contract", () => {
     expect(activeSubscriptions).toBe(0);
   });
 
-  it("waits the full 60-second bound without changing semantic state or evidence", async () => {
+  it("waits the full four-minute bound without changing semantic state or evidence", async () => {
     vi.useFakeTimers();
     try {
-      expect(AURALIS_WEBMCP_WAIT_TIMEOUT_MS).toBe(60_000);
+      expect(AURALIS_WEBMCP_WAIT_TIMEOUT_MS).toBe(240_000);
       const controller = createExperienceController();
       expect(stage(controller).ok).toBe(true);
       const before = controller.getSnapshot();
@@ -1096,7 +1107,7 @@ describe("Auralis WebMCP deterministic domain contract", () => {
       continuation: {
         action: "explain-then-wait",
         tool: "wait_for_session_change",
-        waitInput: { timeoutMs: 60_000 },
+        waitInput: { timeoutMs: 240_000 },
       },
     });
 
@@ -1110,6 +1121,7 @@ describe("Auralis WebMCP deterministic domain contract", () => {
       continuation: {
         action: "call-tool",
         tool: "play_listening_comparison",
+        instruction: expect.stringContaining("silent listening interval"),
         waitInput: null,
         doNotEndTurn: true,
       },
@@ -1949,24 +1961,29 @@ describe("Auralis WebMCP deterministic domain contract", () => {
     const options = deriveValidAdaptationOptions(agentController.getSnapshot());
     expect(options.map((option) => [option.variable, option.value])).toEqual([
       ["television_state", "tv-off"],
-      ["speaker_position", "closer-in-front"],
       ["support_mode", "left-one-sided"],
+      ["speaker_position", "closer-in-front"],
       ["support_mode", "bilateral"],
     ]);
     expect(getAuralisState(agentController)).toMatchObject({
       ok: true,
       phase: "ready_for_adaptation",
+      continuation: {
+        action: "call-tool",
+        tool: "prepare_comparison",
+        instruction: expect.stringContaining("first preferred step"),
+      },
       data: {
         availableAdaptations: [
           { variable: "television_state", value: "tv-off" },
-          { variable: "speaker_position", value: "closer-in-front" },
           { variable: "support_mode", value: "left-one-sided" },
+          { variable: "speaker_position", value: "closer-in-front" },
           { variable: "support_mode", value: "bilateral" },
         ],
       },
     });
 
-    const option = options[1]!;
+    const option = options[2]!;
     const agent = prepareAdaptation(
       agentController,
       "agent-parity",
@@ -2032,7 +2049,7 @@ describe("Auralis WebMCP deterministic domain contract", () => {
   it("allows the first adaptation to continue to a second bounded comparison", () => {
     const controller = baselineObservedController();
     expect(
-      prepareAdaptation(controller, "support-adaptation", "support_mode", "bilateral").ok,
+      prepareAdaptation(controller, "tv-adaptation", "television_state", "tv-off").ok,
     ).toBe(true);
     play(controller, "simulated");
     const result = observe(controller, "observe-2", "comparison-2", {
@@ -2044,6 +2061,13 @@ describe("Auralis WebMCP deterministic domain contract", () => {
       ok: true,
       phase: "ready_for_adaptation",
       data: { nextPhase: "ready_for_adaptation" },
+    });
+    expect(getAuralisState(controller)).toMatchObject({
+      continuation: {
+        action: "call-tool",
+        tool: "prepare_comparison",
+        instruction: expect.stringContaining("second preferred step"),
+      },
     });
   });
 

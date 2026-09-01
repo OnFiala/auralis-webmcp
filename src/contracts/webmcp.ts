@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const AURALIS_WEBMCP_CONTRACT_VERSION = "auralis-webmcp-v1.7" as const;
+export const AURALIS_WEBMCP_CONTRACT_VERSION = "auralis-webmcp-v1.8" as const;
 export const AURALIS_WEBMCP_EVIDENCE_SCHEMA_VERSION =
   "auralis-webmcp-evidence-v4" as const;
 export const AURALIS_WEBMCP_LIMITATION =
@@ -9,7 +9,7 @@ export const AURALIS_WEBMCP_MAX_REVISION = 2_147_483_647;
 export const AURALIS_WEBMCP_MAX_ADAPTATIONS = 2 as const;
 export const AURALIS_WEBMCP_MAX_PLAYBACK_RUNS_PER_COMPARISON = 3 as const;
 export const AURALIS_WEBMCP_PROFILE_OVERRIDE_TIMEOUT_MS = 15_000 as const;
-export const AURALIS_WEBMCP_WAIT_TIMEOUT_MS = 60_000 as const;
+export const AURALIS_WEBMCP_WAIT_TIMEOUT_MS = 240_000 as const;
 
 export const AURALIS_TOOL_NAMES = [
   "get_auralis_state",
@@ -378,7 +378,7 @@ type AgentContinuationBase = Readonly<{
   instruction: string;
 }>;
 
-type AgentWaitInput<T extends 15_000 | 60_000> = Readonly<{
+type AgentWaitInput<T extends 15_000 | 240_000> = Readonly<{
   sessionId: string;
   afterRevision: number;
   timeoutMs: T;
@@ -413,7 +413,7 @@ export type AgentContinuationProjection =
       Readonly<{
         action: "explain-then-wait" | "ask-then-wait";
         tool: "wait_for_session_change";
-        waitInput: AgentWaitInput<60_000>;
+        waitInput: AgentWaitInput<240_000>;
         defaultProfileId: null;
         doNotEndTurn: true;
       }>)
@@ -717,7 +717,7 @@ const continuationBaseSchema = {
   instruction: z.string().min(1),
 } as const;
 
-function continuationWaitInputSchema(timeoutMs: 15_000 | 60_000) {
+function continuationWaitInputSchema(timeoutMs: 15_000 | 240_000) {
   return z
     .object({
       sessionId: sessionIdSchema,

@@ -14,7 +14,7 @@ type ToolResult = Readonly<{
     waitInput: Readonly<{
       sessionId: string;
       afterRevision: number;
-      timeoutMs: 15_000 | 60_000;
+      timeoutMs: 15_000 | 240_000;
     }> | null;
     defaultProfileId: string | null;
     doNotEndTurn: boolean;
@@ -243,7 +243,7 @@ test("pending waits preserve consent and derive an omitted profile timeout", asy
       waitInput: {
         sessionId: expect.any(String),
         afterRevision: 1,
-        timeoutMs: 60_000,
+        timeoutMs: 240_000,
       },
       defaultProfileId: null,
       doNotEndTurn: true,
@@ -619,18 +619,12 @@ test("a staged WebMCP session preserves human gates and completes through browse
     error: { code: "INVALID_PHASE" },
   });
 
-  const transitionRun = await callTool(page, "play_listening_comparison", {
+  const transitionRunPromise = callTool(page, "play_listening_comparison", {
     requestId: "verify-transition-stop",
     expectedRevision: afterImmediateStop.revision,
     comparisonId: "comparison-1",
     playback: "reference-then-simulated",
     focus: "important-speaker",
-  });
-  expect(transitionRun).toMatchObject({
-    ok: true,
-    replayed: false,
-    phase: "awaiting_baseline_listening",
-    data: { status: "started", sequence: ["reference", "simulated"] },
   });
   await expect
     .poll(
@@ -647,6 +641,12 @@ test("a staged WebMCP session preserves human gates and completes through browse
     "data-transport-state",
     "transition",
   );
+  await expect(transitionRunPromise).resolves.toMatchObject({
+    ok: true,
+    replayed: false,
+    phase: "awaiting_baseline_listening",
+    data: { status: "cancelled", sequence: ["reference", "simulated"] },
+  });
   const afterTransitionStop = await callTool(page, "get_auralis_state", {});
   expect(afterTransitionStop).toMatchObject({
     ok: true,
@@ -680,9 +680,9 @@ test("a staged WebMCP session preserves human gates and completes through browse
   expect(guidedBaseline).toMatchObject({
     ok: true,
     replayed: false,
-    phase: "awaiting_baseline_listening",
+    phase: "awaiting_baseline_observation",
     data: {
-      status: "started",
+      status: "completed",
       sequence: ["reference", "simulated"],
       clipWindow: { startSeconds: 32.3, durationSeconds: 8 },
     },
@@ -739,8 +739,8 @@ test("a staged WebMCP session preserves human gates and completes through browse
   await expect(adaptationOptions).toHaveCount(4);
   await expect(adaptationOptions.locator("h3")).toHaveText([
     "Turn the television off",
-    "Move the speaker closer",
     "Add left-ear illustrative support",
+    "Move the speaker closer",
     "Add bilateral illustrative support",
   ]);
   await expect(page.locator(".agent-session-details")).toBeHidden();
@@ -821,8 +821,8 @@ test("a staged WebMCP session preserves human gates and completes through browse
   expect(adaptationListening).toMatchObject({
     ok: true,
     replayed: false,
-    phase: "awaiting_comparison_listening",
-    data: { status: "started", sequence: ["simulated"] },
+    phase: "awaiting_comparison_observation",
+    data: { status: "completed", sequence: ["simulated"] },
   });
   await expect(page.getByRole("heading", { name: "Did that change help?" })).toBeFocused({
     timeout: 60_000,

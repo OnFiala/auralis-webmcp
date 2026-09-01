@@ -265,19 +265,6 @@ export function deriveValidAdaptationOptions(
       }),
     );
   }
-  if (state.speakerPositionState !== "closer-in-front") {
-    options.push(
-      Object.freeze({
-        variable: "speaker_position" as const,
-        value: "closer-in-front" as const,
-        label: "Move the speaker closer",
-        explanation:
-          "Change only the important speaker's bounded illustrative position in B.",
-        listenFor:
-          "Listen for the central voice separating more clearly from the group.",
-      }),
-    );
-  }
   if (state.supportMode === "none") {
     options.push(
       Object.freeze({
@@ -288,6 +275,19 @@ export function deriveValidAdaptationOptions(
           "Apply bounded illustrative support to the left ear only in B.",
         listenFor:
           "Listen for a smaller one-ear change before trying both sides.",
+      }),
+    );
+  }
+  if (state.speakerPositionState !== "closer-in-front") {
+    options.push(
+      Object.freeze({
+        variable: "speaker_position" as const,
+        value: "closer-in-front" as const,
+        label: "Move the speaker closer",
+        explanation:
+          "Change only the important speaker's bounded illustrative position in B.",
+        listenFor:
+          "Listen for the central voice separating more clearly from the group.",
       }),
     );
   }
@@ -569,7 +569,7 @@ function agentContinuationForState(
       return state.agentPlaybackGranted
         ? callToolContinuation(
             "play_listening_comparison",
-            "Use play_listening_comparison for the current comparison. Prefer reference-then-simulated with important-speaker focus when both perspectives remain unheard. Explain the timed A/B sequence from Auralis narration and continue after natural playback completion.",
+            "Briefly explain what A and B represent and the listening focus before playback. Finish that explanation completely, then call play_listening_comparison for the current comparison. Prefer reference-then-simulated with important-speaker focus when both perspectives remain unheard. Treat the pending tool call as a silent listening interval: do not speak, write narration, or call another tool until it returns after completion, failure, or the person's Stop action. Only then ask what the person noticed.",
           )
         : standardWaitContinuation(
             state,
@@ -584,9 +584,22 @@ function agentContinuationForState(
         "Ask what the person noticed in everyday language. If their answer is already present in the current message, translate only that answer and call record_user_observation. Otherwise call wait_for_session_change with the exact waitInput after asking; do not require enum wording.",
       );
     case "ready_for_adaptation":
-      return callToolContinuation(
-        "prepare_comparison",
-        "Explain the currently available adaptations from Auralis and use the person's stated preference when present. Otherwise start with television off for the clearest environmental change, then continue with the returned directive.",
+      if (state.interventionState !== "tv-off") {
+        return callToolContinuation(
+          "prepare_comparison",
+          "Use an explicit preference from the person's current message when present. Otherwise briefly explain that the first preferred step removes only the television masking contribution, then call prepare_comparison with television_state set to tv-off and continue with the returned directive. Do not proactively choose speaker position or bilateral support.",
+        );
+      }
+      if (state.supportMode === "none") {
+        return callToolContinuation(
+          "prepare_comparison",
+          "Use an explicit preference from the person's current message when present. Otherwise briefly explain that the second preferred step adds bounded left-ear illustrative support, then call prepare_comparison with support_mode set to left-one-sided and continue with the returned directive. Speaker position and bilateral support remain opt-in alternatives only when the person explicitly requests them.",
+        );
+      }
+      return standardWaitContinuation(
+        state,
+        "ask-then-wait",
+        "Do not choose another adaptation automatically. Ask whether the person explicitly wants one of the remaining available adaptations or wants to finish, then call wait_for_session_change with the exact waitInput.",
       );
     case "complete":
       return Object.freeze({

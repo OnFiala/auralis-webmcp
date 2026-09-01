@@ -616,8 +616,8 @@ describe("coherent TV-off intervention", () => {
       televisionMaskingGainDb: TELEVISION_MASKING_GAIN_DB,
       sourceMixHeadroomDb: SOURCE_MIX_HEADROOM_DB,
     });
-    expect(TELEVISION_MASKING_GAIN_DB).toBe(6);
-    expect(TELEVISION_MASKING_GAIN_LINEAR).toBeCloseTo(1.995262, 6);
+    expect(TELEVISION_MASKING_GAIN_DB).toBe(8);
+    expect(TELEVISION_MASKING_GAIN_LINEAR).toBeCloseTo(2.511886, 6);
     expect(SOURCE_MIX_HEADROOM_DB).toBe(-1.5);
     expect(SOURCE_MIX_HEADROOM_LINEAR).toBeCloseTo(0.841395, 6);
     expect(referenceOn.sourceContributions).toEqual({
@@ -636,7 +636,7 @@ describe("coherent TV-off intervention", () => {
     expect(referenceOff.sourceIdentity).toBe(referenceOn.sourceIdentity);
     expect(referenceOff.resultIdentity).not.toBe(referenceOn.resultIdentity);
     expect(referenceOn.resultIdentity).toContain(SOURCE_MIX_ALGORITHM_VERSION);
-    expect(referenceOn.resultIdentity).toContain("television-mask:6.0db");
+    expect(referenceOn.resultIdentity).toContain("television-mask:8.0db");
     expect(referenceOn.resultIdentity).toContain("headroom:-1.5db");
 
     for (const supportMode of [
@@ -655,7 +655,7 @@ describe("coherent TV-off intervention", () => {
       expect(tvOff.leftFilters).toEqual(tvOn.leftFilters);
       expect(tvOff.rightFilters).toEqual(tvOn.rightFilters);
       expect(tvOff.resultIdentity).toContain(SOURCE_MIX_ALGORITHM_VERSION);
-      expect(tvOff.resultIdentity).toContain("television-mask:6.0db");
+      expect(tvOff.resultIdentity).toContain("television-mask:8.0db");
       expect(tvOff.resultIdentity).toContain("headroom:-1.5db");
     }
 
@@ -666,7 +666,7 @@ describe("coherent TV-off intervention", () => {
       "closer-in-front",
     );
     expect(closer.resultIdentity).toContain(SOURCE_MIX_ALGORITHM_VERSION);
-    expect(closer.resultIdentity).toContain("television-mask:6.0db");
+    expect(closer.resultIdentity).toContain("television-mask:8.0db");
     expect(closer.resultIdentity).toContain("headroom:-1.5db");
   });
 

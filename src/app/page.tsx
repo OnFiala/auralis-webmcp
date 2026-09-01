@@ -649,15 +649,14 @@ export default function HomePage() {
           void agentPlaybackRunnerRef
             .current(run, () => {
               started = true;
-              resolve();
             })
             .then(() => {
-              if (!started) {
-                reject(new Error("Playback was cancelled before it started."));
-              }
+              started
+                ? resolve()
+                : reject(new Error("Playback was cancelled before it started."));
             })
             .catch((error: unknown) => {
-              if (!started) reject(error);
+              reject(error);
             });
         }),
     }),
