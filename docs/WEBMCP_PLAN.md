@@ -6,6 +6,19 @@ Auralis turns a synthetic hearing profile into a guided, same-source listening c
 
 This document is the public product and delivery contract for that extension. It records behavior, architecture, human authority, validation, rollback, and release evidence. It intentionally excludes machine-specific diagnostics, private execution transcripts, credentials, and temporary build artifacts.
 
+## Competition and provenance boundary
+
+This repository contains two intentionally separate bodies of work:
+
+| Era | Public Git boundary | What belongs to it | Authority |
+|---|---|---|---|
+| Original Auralis / OpenAI Build Week 2026 | Public `main` through `53fa83e188a0c5e076c5a0f651f2d937b167954d`, dated July 21, 2026 | Human-guided product, deterministic same-source A/B audio, synthetic family scene, browser safety and evidence, optional sanitized GPT explanation, original deployment, and the July governance/design record. | The three immutable Build Week snapshots plus their dated derived phase records. Historical only for the current competition. |
+| Auralis WebMCP / WebMCP Challenge | Feature history beginning at `8af992e8d9454060d07979eae9c6c9a23fc64bb2`, dated August 29, 2026, directly above `53fa83e`; current implementation checkpoint `2a856f0783a1cef5bb3552720249ae03ae171dc2` | WebMCP tools and browser registration, shared-session state and continuation, agent-only activation, human gates, playback custody, synthetic demo profiles and mix, agent presentation, generated-asset provenance, native-host hardening, tests, and release evidence. | Current Official Rules, this document, runtime code, and tests in the hierarchy defined by `AGENTS.md`. |
+
+Owner records place WebMCP work no later than August 28, 2026. That statement is owner evidence; the first independently reproducible public Git evidence is `8af992e` on August 29. The distinction is deliberate and must not be collapsed into a stronger Git claim.
+
+The current external authority is the [WebMCP Challenge Official Rules](https://webmcp.devpost.com/rules), rechecked September 2, 2026. The submission period began August 25, 2026. Existing projects are permitted when the new WebMCP work is meaningful and clearly separated from prior work. The July OpenAI Build Week rules, category, dates, and `/feedback` requirement remain preserved in immutable historical files but do not govern this submission.
+
 ## Product contract
 
 The V1 experience has one prepared family scene, three predefined synthetic profiles, two synchronized listening perspectives, and a bounded adaptive loop. It is illustrative and non-diagnostic. It does not require or accept a personal audiogram. The active preset set is `auralis-synthetic-presets-v2`: each retained v1 fixture is shifted numerically by +10 dB HL, which draws the same curve 10 dB lower and drives the deterministic audio transformation from that exact versioned source.
@@ -62,7 +75,7 @@ Every registered tool also states the same control preference: follow `continuat
 
 Inputs are narrow and validated. Mutations use request IDs and expected revisions. Stale revisions, reused requests with different payloads, invalid phases, invalid comparisons, and missing human actions fail explicitly.
 
-The implementation follows the official [OpenAI WebMCP guidance](https://learn.chatgpt.com/docs/webmcp): feature-detect browser support, reuse existing application logic and validation, describe side effects, return verifiable results, and preserve the normal interface for people and unsupported browsers. Page clicks update the shared semantic state and revision immediately. WebMCP does not expose a general page-to-agent event subscription API, so Auralis combines one bounded page wait over the existing controller subscription with explicit continuation instructions. This can keep an already-active host run waiting without model polling, but the page still cannot restart a host turn that the model already ended or mute host narration. V1.9 therefore requires a no-preface playback call and adds a deterministic page-owned eight-second quiet lead-in before agent-started audio. An owner-observed local native run on `157ba50` proved continuous voice-guided behavior through two adaptations under V1.8; V1.9 quiet-lead-in timing, reference replay, and exact-candidate Preview behavior remain native-host acceptance claims rather than consequences inferred from browser mocks.
+The implementation follows the official [OpenAI WebMCP guidance](https://learn.chatgpt.com/docs/webmcp): feature-detect browser support, reuse existing application logic and validation, describe side effects, return verifiable results, and preserve the normal interface for people and unsupported browsers. Page clicks update the shared semantic state and revision immediately. WebMCP does not expose a general page-to-agent event subscription API, so Auralis combines one bounded page wait over the existing controller subscription with explicit continuation instructions. This can keep an already-active host run waiting without model polling, but the page still cannot restart a host turn that the model already ended or mute host narration. V1.9 therefore requires a no-preface playback call and adds a deterministic page-owned eight-second quiet lead-in before agent-started audio. Owner-observed native text and voice sessions later completed the guided flow before the narrow `712606a` playback-ownership instruction hardening. The exact `2a856f0` Preview was subsequently owner-observed as functional. These are owner runtime observations, not consequences inferred from browser mocks; the post-hardening model benchmark remains a separate release-candidate gate.
 
 ## State machine and human gates
 
@@ -136,19 +149,25 @@ The WebMCP extension adds:
 |---|---|---|
 | BUILD-1 | Deterministic domain contract, state transitions, errors, evidence, and focused tests. | Implemented; clean-clone contract tests passed. |
 | BUILD-2 | Feature-detected browser registration, shared commit gateway, and adapter tests. | Implemented; clean-clone adapter and registration tests passed. |
-| BUILD-3A | Structural Agent Reveal, visible human gates, current state, and next action. | Implemented at `6b18563373ef1279bc1639525e952b86b0dc18d2`; clean Linux build, mocked WebMCP host journey, reduced-motion, Stop, reset, smoke, and existing human journeys passed. Local native typed/click proof passed on `b84d4c3`; current voice and exact public Preview proof remain VERIFY work. |
+| BUILD-3A | Structural Agent Reveal, visible human gates, current state, and next action. | Implemented at `6b18563373ef1279bc1639525e952b86b0dc18d2`; clean Linux build, mocked WebMCP host journey, reduced-motion, Stop, reset, smoke, and existing human journeys passed. Later owner-observed native text and voice sessions and the exact `2a856f0` Preview reached functional completion. |
 | VERIFY-1 | Automated real-browser WebMCP journey, human fallback, negative gates, accessibility, and failure paths. | Implemented and independently reviewed at `c08ddf3fa53ebe77d814fbe19f4a4025ea93daa9`; aggregate validation passed with six Chromium WebMCP journeys and zero model-route calls. |
-| VERIFY-0 | Native site-tool discovery and the intended typed and voice agent control in the supported desktop host. | Local commit `b84d4c3` passed an owner-observed native typed/click live session through consent, the 15-second profile default, scene loading, volume and playback authority, natural A/B completion, one television-off adaptation, and terminal summary at revision 20 with two completed playback runs. Current voice steering and the exact published Preview remain pending; the older V1 voice/Stop evidence does not replace those current-candidate checks. |
+| VERIFY-0 | Native site-tool discovery and the intended typed and voice agent control in the supported desktop host. | Owner-observed text and voice walkthroughs completed the current flow before `712606a`; the exact `2a856f0` Preview was then owner-observed as functional. `712606a` changes only tool guidance that keeps playback agent-owned. A post-hardening run with the owner-selected benchmark model remains pending and must not be inferred from the earlier walkthroughs. |
 | DESIGN-1 | Three visual directions generated from verified final-state screenshots. | Complete. Three grounded ImageGen directions were produced from the canonical family scene and the existing human/agent references; direction 2, `Resonant Canvas`, is the selected DESIGN-LOCK. |
-| VISUAL-UPDATE | One selected complete visual system for human and agent-guided modes. | Agent-mode `Resonant Canvas`, onboarding, compact audiograms, automatic scene/baseline preparation, explicit agent-playback custody, repeated listen-observe-adapt loops, and the responsive listening surfaces are versioned in `8711001`. The V1.4 broadband mix and four-option adaptation order are isolated in `6b93385`; the automatic terminal summary uses the same dark agent surface without importing the human report layout. Current voice, exact public Preview verification, and the later human-mode visual update remain separate gates. |
+| VISUAL-UPDATE | One selected complete visual system for human and agent-guided modes. | Agent-mode `Resonant Canvas`, onboarding, compact audiograms, automatic scene/baseline preparation, explicit agent-playback custody, repeated listen-observe-adapt loops, and responsive listening surfaces are versioned in `8711001`. The V1.4 broadband mix and four-option adaptation order are isolated in `6b93385`; the automatic terminal summary uses the same dark agent surface. BTE v2 received owner approval and the exact `2a856f0` Preview was owner-observed as functional. A broader human-mode redesign is not part of the current WebMCP submission candidate. |
 | LIVE-SESSION V1.6 | Bounded event-driven continuation over the existing page session. | `c493d36` adds `wait_for_session_change`; `1e5cd9b` reserves it for passive phases; `87a93cc` extends ordinary waits to 60 seconds. The local native run on `b84d4c3` stayed active across every passive gate and completed both bounded comparisons. |
-| SESSION-PROTOCOL V1.7 | Machine-readable same-run continuation plus a bounded demo-profile recommendation window. | `2af80ff` adds strict `continuation` guidance and the 15-second profile window; `b84d4c3` derives an omitted optional timeout from the current phase for native-host compatibility. The local native typed/click session completed successfully; current voice and exact public Preview verification remain pending. |
-| SESSION-PROTOCOL V1.8 | Longer human waits, a tool-held silent playback interval, and the preferred TV-off then left-ear-support path. | Local implementation is based on rollback SHA `8bd45931`. Typecheck, core contract tests, browser contract tests, production build, and the focused WebMCP Playwright journey pass locally; native voice and physical-listening QA remain the owner acceptance gate. |
-| SESSION-PROTOCOL V1.9 | Page-owned quiet lead-in before agent-started audio plus explicit reference-A replay. | Implemented in rollback commit `a514a4e`. Typecheck, 80 WebMCP tests, production build, the nine-scenario browser journey, and independent review pass. Native host voice-overlap QA remains the owner acceptance gate. |
-| TERMINAL-SUMMARY REFINEMENT | A concise three-part completion surface: observations, purpose, and future directions. | Local presentation candidate only. It preserves evidence v4 and all session semantics; local visual QA and owner approval of the generated static educational asset passed. Exact public Preview browser acceptance remains a separate post-push release gate. |
-| RELEASE | Public history, public deployment, demo evidence, and submission package. | Not started. |
+| SESSION-PROTOCOL V1.7 | Machine-readable same-run continuation plus a bounded demo-profile recommendation window. | `2af80ff` adds strict `continuation` guidance and the 15-second profile window; `b84d4c3` derives an omitted optional timeout from the current phase for native-host compatibility. At that checkpoint, local native typed/click passed while voice and Preview remained pending; their later owner evidence is recorded in the current release checkpoint below. |
+| SESSION-PROTOCOL V1.8 | Longer human waits, a tool-held silent playback interval, and the preferred TV-off then left-ear-support path. | Implemented from rollback SHA `8bd45931`. Typecheck, core contract tests, browser contract tests, production build, focused WebMCP Playwright, native voice, and physical-listening owner QA passed before later instruction-only hardening. |
+| SESSION-PROTOCOL V1.9 | Page-owned quiet lead-in before agent-started audio plus explicit reference-A replay. | Implemented in rollback commit `a514a4e`. Typecheck, 80 WebMCP tests, production build, the nine-scenario browser journey, independent review, and owner voice-overlap QA passed. |
+| TERMINAL-SUMMARY REFINEMENT | A concise three-part completion surface: observations, purpose, and future directions. | Implemented and publicly versioned. It preserves evidence v4 and all session semantics; local visual QA, BTE v2 owner approval, and owner-observed exact Preview behavior passed. |
+| RELEASE | Public history, public deployment, demo evidence, and submission package. | Feature history and immutable Preview are published. Documentation repair, RC freeze, benchmark, `main` merge, production promotion, public video, and final submission remain separate pending gates. |
 
-BUILD-3A begins only after BUILD-1 and BUILD-2 are reconstructed, reviewed, tested, and published on the canonical public development branch.
+### Current release checkpoint — September 2, 2026
+
+- **Source/config:** public feature branch `feat/webmcp-live-session-v1-6` and its remote tracking ref are bound to implementation checkpoint `2a856f0783a1cef5bb3552720249ae03ae171dc2`; public `main` remains the pre-WebMCP baseline `53fa83e188a0c5e076c5a0f651f2d937b167954d`.
+- **Automated verification:** `npm run typecheck`, all 80 focused WebMCP unit/adapter tests, and `npm run build` passed at `2a856f0` immediately before this documentation-only repair. The full Playwright matrix was not rerun because no runtime file changed.
+- **Owner runtime evidence:** current text and voice walkthroughs completed before the narrow `712606a` guidance hardening. The immutable `2a856f0` Preview at [auralis-build-week-2026-jnqqycexk-build-week2026.vercel.app](https://auralis-build-week-2026-jnqqycexk-build-week2026.vercel.app) was owner-observed as functional.
+- **Access boundary:** the Preview is Vercel-access-protected. Current rules allow authentication when credentials are supplied in the submission form, but evaluator access or exact credentials remain `UNVERIFIED` until the submission package gate.
+- **Pending:** approve and commit this documentation repair; freeze an exact RC; run the owner-selected model benchmark; resolve or explicitly dispose dependency/security findings; authorize and perform `main` merge; separately authorize production promotion; prepare the public sub-three-minute YouTube video and English submission; recheck the final form.
 
 ## Visual and interaction direction
 
@@ -219,24 +238,17 @@ Acceptance also requires:
 
 ## Public history and release safety
 
-Public commits are small and meaningful:
+The public implementation history before this documentation repair contains 27 linear commits above the preserved pre-WebMCP base. Do not maintain a second hand-copied commit ledger here; Git is the canonical complete sequence:
 
-1. `docs(webmcp): add public architecture and delivery plan`
-2. `feat(webmcp): add deterministic domain contract`
-3. `feat(webmcp): register browser tools`
-4. `docs(webmcp): publish build-2 implementation map`
-5. `feat(webmcp): add structural agent reveal`
-6. `docs(webmcp): record build-3a acceptance`
-7. `docs(webmcp): align build-3a public status`
-8. `test(webmcp): add verified browser journey`
-9. `docs(webmcp): record verify-1 acceptance`
-10. `feat(webmcp): add bounded live-session waiting`
-11. `fix(webmcp): reserve waits for passive phases`
-12. `fix(webmcp): extend passive wait to 60 seconds`
-13. `fix(webmcp): keep agent run across human gates`
-14. `fix(webmcp): derive wait timeout from session phase`
-15. `docs(webmcp): record native live-session verification`
-16. `feat(webmcp): refine persistent guided session`
+```bash
+git log --reverse --date=short --format='%h %ad %s' 53fa83e188a0c5e076c5a0f651f2d937b167954d..2a856f0783a1cef5bb3552720249ae03ae171dc2
+```
+
+The stable provenance anchors are:
+
+- pre-WebMCP base: `53fa83e188a0c5e076c5a0f651f2d937b167954d`;
+- first reachable public WebMCP commit: `8af992e8d9454060d07979eae9c6c9a23fc64bb2`;
+- implementation checkpoint before this documentation repair: `2a856f0783a1cef5bb3552720249ae03ae171dc2`.
 
 The public branch starts from the live public `main`. Only the explicitly reviewed branch ref is pushed. Broad ref pushes are not used.
 
@@ -253,6 +265,8 @@ Before push, the release gate binds:
 Push, pull request, merge, production promotion, release tag, and hackathon submission remain separate human-authorized actions.
 
 ## Rollback
+
+This documentation repair changes no runtime behavior. Before commit, discard only its reviewed documentation allowlist and restore those paths from `2a856f0783a1cef5bb3552720249ae03ae171dc2`. After commit, revert the single approved documentation commit. Do not rewrite the published WebMCP history or modify the three immutable Build Week snapshots.
 
 Before the local v1.5 commit, reject the complete contract/reducer/summary/test/documentation diff without changing public history. After commit, revert the complete v1.5 commit. The coupled terminal phase, evidence schema, summary projection, acceptance tests, and documentation must never be rolled back independently.
 
@@ -335,18 +349,20 @@ Rollback is one isolated V1.10 protocol commit over `2deac7f`; reverting it rest
 - WebMCP tools do not cross consent, acknowledge physical volume, export, reset, or override Stop. `play_listening_comparison` starts only a current bounded run after the separate human grant. After consent, `stage_demo_session` may select exactly one approved synthetic profile; the same choice is available through a human click. The final valid `record_user_observation` may atomically complete the session and record one system-attributed terminal event without a second human or agent mutation.
 - Playback evidence distinguishes requested, started, completed, cancelled, and failed. Stop invalidates the active run and never marks a mode heard; only natural media completion does.
 - The page owns timed visible guidance during A-to-B playback. V1.9 instructs the agent to call playback without a spoken preface, then owns a cancellable eight-second quiet lead-in; the tool stays pending until the complete sequence ends, fails, or is stopped. The current WebMCP host surface does not guarantee a timed agent message between the two legs or allow the page to mute host TTS, so Auralis keeps that interval intentionally silent rather than pretending to wake the agent.
-- `wait_for_session_change` is a bounded Promise-based tool call, not a WebSocket or guaranteed host subscription. `continuation.doNotEndTurn` is a host instruction, not a page-level execution primitive. Mock and Playwright coverage prove page-side semantics only. Local native evidence on `b84d4c3` proves consent waiting, profile explanation/default, later human gates, typed observations, playback completion, one adaptation, and terminal summary; it does not prove current voice or the future public Preview.
-- Current real-agent voice behavior and exact published-Preview behavior require dedicated runtime verification and must not be inferred from the successful local typed/click run.
+- `wait_for_session_change` is a bounded Promise-based tool call, not a WebSocket or guaranteed host subscription. `continuation.doNotEndTurn` is a host instruction, not a page-level execution primitive. Mock and Playwright coverage prove page-side semantics only. Owner-observed native text and voice completions and owner-observed Preview behavior are separate runtime evidence; they do not prove universal host compliance.
+- The narrow `712606a` playback-ownership wording repair has automated source evidence but still requires the planned owner-selected model benchmark before RC acceptance.
 
 ## Hackathon evidence
 
-The final submission must bind the same public source and behavior across:
+Under the [WebMCP Challenge Official Rules](https://webmcp.devpost.com/rules), rechecked September 2, 2026, the final submission must bind the same public source and behavior across:
 
 - a public licensed repository;
-- a dated public diff showing the WebMCP extension;
-- a public deployed URL that works without an account or participant-owned API key;
-- a short public demo video showing the same implemented behavior;
-- the required Codex feedback/session identifier, submitted only through the required submission field and never committed or publicly logged unless the rules explicitly require publication;
+- a dated public history that clearly separates the pre-existing Auralis baseline from the meaningful WebMCP work created during the current submission period;
+- a working live URL usable in the supported ChatGPT in-app browser or Chrome with WebMCP; authentication is permitted only when the required credentials are supplied in the submission form;
+- a public YouTube video shorter than three minutes, with audio explaining the working product and how WebMCP is used;
+- English submission materials or English translations;
 - an English project description that does not overstate unverified features.
+
+The checked public rules and overview do not require a Codex `/feedback`, session ID, or thread ID. Preserve any such identifier privately unless the final authenticated submission form explicitly asks for it and the owner authorizes disclosure.
 
 The running build, public repository, video, and submission text must describe the same product state.

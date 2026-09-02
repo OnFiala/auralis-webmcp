@@ -2,15 +2,120 @@
 
 > See what hearing sounds like.
 
+## What Auralis is
+
 Auralis turns an audiogram into a guided listening comparison. A user chooses an illustrative hearing profile, enters the same 64-second family scene, compares the source reference with a deterministic profile result, and then tries changes such as reducing television sound or moving the important speaker closer.
 
 Auralis is an educational, non-clinical experience. It does not diagnose hearing, reproduce an individual person's perception exactly, fit a hearing aid, prescribe treatment, or predict benefit.
 
-- **Live application:** [auralis-build-week-2026.vercel.app](https://auralis-build-week-2026.vercel.app)
-- **Runtime implementation baseline:** [`384ece76a29ab4f3c82e69e1bc1c585044d82c29`](https://github.com/OnFiala/auralis-build-week-2026/commit/384ece76a29ab4f3c82e69e1bc1c585044d82c29)
+The product is designed for a family member, partner, or friend who wants to understand why an everyday conversation may become difficult. Its core proof is deliberately simple: keep the people, words, timing, and source scene the same, then change only the illustrated listening conditions. The person can hear both perspectives and describe the difference in ordinary language.
+
+- **Original Build Week production:** [auralis-build-week-2026.vercel.app](https://auralis-build-week-2026.vercel.app), sourced from the pre-WebMCP `main` history
+- **Pre-WebMCP public baseline:** [`53fa83e188a0c5e076c5a0f651f2d937b167954d`](https://github.com/OnFiala/auralis-build-week-2026/commit/53fa83e188a0c5e076c5a0f651f2d937b167954d); the original runtime implementation was established at [`384ece76a29ab4f3c82e69e1bc1c585044d82c29`](https://github.com/OnFiala/auralis-build-week-2026/commit/384ece76a29ab4f3c82e69e1bc1c585044d82c29)
+- **WebMCP implementation checkpoint:** [`2a856f0783a1cef5bb3552720249ae03ae171dc2`](https://github.com/OnFiala/auralis-build-week-2026/commit/2a856f0783a1cef5bb3552720249ae03ae171dc2) on [`feat/webmcp-live-session-v1-6`](https://github.com/OnFiala/auralis-build-week-2026/tree/feat/webmcp-live-session-v1-6)
+- **WebMCP Preview:** [immutable candidate deployment](https://auralis-build-week-2026-jnqqycexk-build-week2026.vercel.app), owner-observed as functional on September 2, 2026; production promotion and final judge-access verification remain separate gates
 - **OpenAI API key:** optional; the complete deterministic journey works without one
 
-## WebMCP extension
+## Two development eras
+
+Auralis has two deliberately separate development eras:
+
+### Original Auralis — OpenAI Build Week 2026
+
+The July 2026 project created the complete human-controlled foundation:
+
+- a seven-step guided browser journey;
+- predefined profiles and exact manual bilateral audiogram entry;
+- one validated 64-second synthetic family scene built from four synchronized stems;
+- deterministic same-source A/B rendering in the browser;
+- one-sided and bilateral illustrative support, television on/off, and speaker-position comparisons;
+- explicit volume, playback, Stop, safety, privacy, and evidence boundaries;
+- one optional sanitized GPT-5.6 Terra explanation that never controls the audio;
+- automated validation, public deployment, and the original governance and design history.
+
+That original application is preserved on `main` through `53fa83e`. Its immutable Build Week documents remain historical provenance. Their dates, category, `/feedback` field, and submission rules do not govern the later WebMCP Challenge.
+
+### Auralis WebMCP — WebMCP Challenge
+
+The later work turns the same trusted listening core into a shared human-agent experience. The current competition period began on August 25, 2026. Owner records place WebMCP work no later than August 28; public Git evidence begins with [`8af992e`](https://github.com/OnFiala/auralis-build-week-2026/commit/8af992e8d9454060d07979eae9c6c9a23fc64bb2) on August 29, directly above the preserved `53fa83e` baseline.
+
+The new public feature history adds:
+
+- seven semantic WebMCP tools instead of DOM automation;
+- one shared, revisioned session state for page actions and agent actions;
+- agent-only activation and a full visual Agent Reveal;
+- a deliberately different agent-guided interface while retaining the complete human interface;
+- click, typed-agent, and voice-agent control over the same live session;
+- bounded active waiting for human decisions without model polling;
+- two formal human gates for consent and comfortable physical volume, plus a separate optional grant for agent-started playback;
+- deterministic agent playback with a quiet lead-in, immediate human Stop, and reference-A replay;
+- everyday-language observations mapped into bounded non-diagnostic evidence;
+- a guided listen-observe-adapt loop with television-off and left-ear support as the preferred first changes;
+- one deterministic agent summary and versioned visual/media provenance;
+- stale-revision, idempotency, request-replay, failure, reset, and rollback protection.
+
+The WebMCP work is additive and traceable. It does not rewrite or pretend to recreate the original Auralis history.
+
+The current competition authority is the [WebMCP Challenge Official Rules](https://webmcp.devpost.com/rules), rechecked September 2, 2026. The exact product, evidence, rollback, and release boundary for the new work lives in [`docs/WEBMCP_PLAN.md`](docs/WEBMCP_PLAN.md).
+
+## The signature WebMCP experience
+
+The central product idea is not merely that an agent can click the existing website. Auralis exposes the meaning of the experience—state, choices, human gates, playback authority, observations, and evidence—through WebMCP. The agent works through those semantic tools while the person remains in control of the live page.
+
+### A human page that transforms only for an agent
+
+The landing page is always human-first. Merely browsing or clicking never enters agent mode. Its `Agentic ready` badge only explains that the site can be used with an agent.
+
+When a compatible agent discovers the Site Tools and starts the guided session, the page performs a prominent full-surface **Agent Reveal**. The light human journey becomes a dark, cinematic agent-guided system with its own information hierarchy, progress spine, controls, and final summary. This is a different presentation of the same `ExperienceState`, not a second product state machine.
+
+### Two entry paths, three control channels
+
+A person can begin in either direction:
+
+1. Ask an agent to find and open Auralis—for example, “Help me understand why my father struggles to hear in a family conversation.” The agent discovers WebMCP and starts the guided session.
+2. Open Auralis normally, then ask an agent already connected to the page to summarize it or guide the comparison. The first valid start tool activates Agent Reveal.
+
+After activation, the person can mix three complementary control channels where the host and current phase support them:
+
+- click a visible page control;
+- type an instruction or answer to the agent;
+- speak to the agent in voice mode.
+
+The page and agent always read and update the same revisioned session. A direct click is therefore a real session event, not an action the agent must imitate through Computer Use.
+
+### One continuing session that waits for the person
+
+The defining orchestration feature is `wait_for_session_change`. After the agent explains a human step, it can keep one read-only WebMCP call pending against the exact session and revision. Consent, scene preparation, volume confirmation, direct playback, and observations use a four-minute human window. The optional profile override uses a deliberate 15-second window.
+
+While the person reads, listens, clicks, types, or speaks, no model polling is required. When the page revision changes, the pending tool returns the new semantic state and the same active agent run can explain and perform the next allowed step. A timeout changes no state and grants no authority. This approximates an event-driven live session over ordinary WebMCP tool calls; it is not a WebSocket and the page cannot revive an agent turn that the host has already ended.
+
+### Human authority inside an agent-first flow
+
+The agent actively explains the profiles, selects or honors the chosen demonstration, prepares comparisons, starts authorized playback, asks what the person heard, translates only that stated meaning into bounded fields, and proposes the next useful change. It never diagnoses hearing or invents an observation.
+
+The person always retains the consequential controls:
+
+- consent cannot be supplied by a WebMCP tool;
+- comfortable physical listening level must be confirmed visibly;
+- agent-started audio requires a separate visible grant;
+- Stop remains directly available during interruptible playback, while reset remains a visible bounded control and may be disabled during a busy state or modal;
+- interrupted audio never counts as heard;
+- the person can override profile and adaptation choices by click, text, or voice when that channel and choice are currently available.
+
+If the person hears no clear difference, the agent is instructed to explain what to listen for and replay the comparison instead of fabricating a conclusion. After the bounded adaptation loop, the session opens a deterministic, non-clinical summary of what was compared and what the person actually reported.
+
+### Guided agent path
+
+1. **Discover and reveal** — the agent reads the available WebMCP capabilities and starts the session; the human landing transforms into Agent Reveal.
+2. **Explain and wait for consent** — the agent states the illustrative limitation, then waits for the person's visible confirmation.
+3. **Explain and choose a demo profile** — the agent grounds all three choices in Auralis-provided descriptions, recommends the asymmetric profile for the clearest demo contrast, and gives the person 15 seconds to override it by click, text, or voice.
+4. **Load the scene and wait for listening authority** — Auralis loads the fixed scene automatically; the agent explains the screen and waits for comfortable-volume confirmation. If agent-started playback is desired, the person also enables the separate grant; otherwise playback remains available through the page controls.
+5. **Run the first A/B comparison** — the agent starts the authorized reference and illustrative sequence without talking over the audio, then asks what the person noticed.
+6. **Interpret only the stated observation** — the agent converts ordinary language into the bounded evidence fields or guides and replays when there was no clear difference.
+7. **Try one useful change at a time** — television off is the preferred first adaptation, followed by left-ear support; speaker position and bilateral support remain available on explicit request.
+8. **Complete with attributable meaning** — after the bounded loop, Auralis presents one deterministic summary of the actual comparisons, observations, limitation, and safe future directions.
+
+## WebMCP implementation details
 
 This feature branch adds the deterministic WebMCP foundation for an agent-guided Auralis session while preserving the complete human journey.
 
@@ -28,17 +133,17 @@ The final valid observation atomically completes the session and opens one deter
 
 `allowedNextTools` is the sole current-executability authority. The V1.10 `continuation` projection is the orchestration directive: it identifies whether the current agent run must explain and wait, call a deterministic tool, ask for an observation, or stop, and includes the exact revision-bound wait input when applicable. Required guidance is channel-aware: the host writes it in text mode or speaks it in voice mode before the related wait or deterministic action. The explicit playback-silence directive overrides that guidance through the page-owned quiet lead-in and audio. `continuation` never grants new authority or changes state. The capabilities projection reports `agenticActivationTool` only while initial activation is actually possible and separately reports the current `stageDemoSessionAction` as `start`, `select-profile`, or `null`. Tool descriptions instruct compatible agents to follow `continuation` in the same run and use a matching WebMCP tool before Computer Use. Computer Use remains a fallback for an explicitly approved visible human gate or when no matching WebMCP tool is available; the page cannot globally disable a host's normal browser controls while retaining accessible human controls.
 
-During an active agent session, `wait_for_session_change` may hold one read-only call only while `allowedNextTools` says the session is waiting for human or automatic progress. The canonical bound is four minutes for consent, scene loading, volume, direct-human playback, and observations, and 15 seconds only for the profile recommendation window carried in `continuation.waitInput`. Compatible callers should send that exact input; if a host omits the optional `timeoutMs`, the executor derives the same canonical duration from the current phase. An explicitly mismatched duration fails closed. A same-revision call outside waiting states fails immediately with `INVALID_PHASE`, while a call bound to an older revision can still return the newer state as `changed`. Timeout, abort, reset/session replacement, and completion are explicit outcomes. While required playback evidence is still pending, an explicit agent-playback grant instead makes `play_listening_comparison` the sole progression tool, so the agent cannot substitute a wait timeout for an already-authorized playback. V1.10 retains the V1.9 playback rule: the host calls playback without a spoken or written preface, then the page inserts a quiet eight-second lead-in before audio begins; the call remains pending until the complete sequence ends, fails, or the person presses Stop. During an observation phase the same tool can replay source reference A on an explicit human request without creating a new comparison or observation. Waiting never changes revision, evidence, playback, profile, or human authority. This is a bounded revision wait over the existing in-page controller, not a WebSocket, background service, or second state machine. On local commit `b84d4c3`, an owner-observed native ChatGPT Work run stayed active through consent, the profile timeout/default, automatic scene loading, volume and playback gates, natural A/B completion, a typed everyday-language observation, one television-off adaptation, and the terminal summary. Current V1.10 text-channel narration, voice steering, quiet-lead-in timing, and exact-candidate Preview behavior remain separate VERIFY-0 evidence gates.
+During an active agent session, `wait_for_session_change` may hold one read-only call only while `allowedNextTools` says the session is waiting for human or automatic progress. The canonical bound is four minutes for consent, scene loading, volume, direct-human playback, and observations, and 15 seconds only for the profile recommendation window carried in `continuation.waitInput`. Compatible callers should send that exact input; if a host omits the optional `timeoutMs`, the executor derives the same canonical duration from the current phase. An explicitly mismatched duration fails closed. A same-revision call outside waiting states fails immediately with `INVALID_PHASE`, while a call bound to an older revision can still return the newer state as `changed`. Timeout, abort, reset/session replacement, and completion are explicit outcomes. While required playback evidence is still pending, an explicit agent-playback grant instead makes `play_listening_comparison` the sole progression tool, so the agent cannot substitute a wait timeout for an already-authorized playback. V1.10 retains the V1.9 playback rule: the host calls playback without a spoken or written preface, then the page inserts a quiet eight-second lead-in before audio begins; the call remains pending until the complete sequence ends, fails, or the person presses Stop. During an observation phase the same tool can replay source reference A on an explicit human request without creating a new comparison or observation. Waiting never changes revision, evidence, playback, profile, or human authority. This is a bounded revision wait over the existing in-page controller, not a WebSocket, background service, or second state machine. Owner-observed native text and voice walkthroughs reached completion before the narrow `712606a` playback-ownership wording hardening. The exact `2a856f0` Preview was subsequently owner-observed as functional. A post-hardening benchmark on the owner-selected model remains a separate release-candidate gate.
 
 The active synthetic preset set is `auralis-synthetic-presets-v2`. It moves every approved threshold 10 dB HL lower on the displayed audiogram (numerically +10 dB HL) than the retained v1 fixture basis. The accessible SVG plots and deterministic audio transformation both read the same versioned source values, so the visuals and audible simulation cannot drift independently. Raw thresholds remain browser-memory-only and are not exposed in WebMCP state or evidence.
 
 The family mix uses the versioned `auralis-family-mix-v3` plan. While the television is on, its unchanged stem receives one bounded +8 dB broadband gain in the same A/B source mix before the per-ear profile filters; the complete mix reserves deterministic -1.5 dB headroom, and turning the television off removes that contribution completely. Keeping the gain identical in A and B preserves the same-source comparison while making television masking more audible once the synthetic profile reduces speech detail. The preferred adaptation order is TV off, then left-ear support. Moving the speaker closer and bilateral support remain available only when the person explicitly requests another option. The session remains bounded to two adaptations.
 
-The structural Agent Reveal UI and selected `Resonant Canvas` agent-mode visual layer are versioned in `8711001`, with the V1.4 television-masking and adaptation-order delta in `6b93385`. The public-safe design history is recorded in [`docs/DESIGN_QA.md`](docs/DESIGN_QA.md). Local native typed/click continuation has passed on `b84d4c3`; current voice steering, the later human-mode visual update, dependency remediation, exact public Preview verification, and production promotion remain separate gates. See [`docs/WEBMCP_PLAN.md`](docs/WEBMCP_PLAN.md) for the public delivery contract and current status.
+The structural Agent Reveal UI and selected `Resonant Canvas` agent-mode visual layer are versioned in `8711001`, with the V1.4 television-masking and adaptation-order delta in `6b93385`. The public-safe design history is recorded in [`docs/DESIGN_QA.md`](docs/DESIGN_QA.md). The current text/voice evidence and owner-observed Preview result are recorded as owner evidence rather than inferred from automated tests. Dependency remediation, the final model benchmark, production promotion, video, and submission remain separate gates. See [`docs/WEBMCP_PLAN.md`](docs/WEBMCP_PLAN.md) for the canonical current status.
 
-## What the experience contains
+## Original human experience
 
-The product has one guided journey:
+The pre-WebMCP Build Week baseline provides this complete human-guided journey, which remains available when no compatible agent is present:
 
 1. **Welcome** — introduces the comparison and recommends comfortable stereo headphones.
 2. **Profile** — offers three immutable illustrative profiles plus exact manual bilateral entry.
@@ -190,18 +295,18 @@ PLAYWRIGHT_BASE_URL=https://auralis-build-week-2026.vercel.app npm run test:smok
 An automated coding agent should follow this order before making changes:
 
 1. Read the repository-wide [`AGENTS.md`](AGENTS.md).
-2. Read the three authority documents in their declared order:
-   - [`docs/OPENAI_BUILD_WEEK_2026_REQUIREMENTS_RECOMMENDATIONS.md`](docs/OPENAI_BUILD_WEEK_2026_REQUIREMENTS_RECOMMENDATIONS.md)
-   - [`docs/Auralis_preparation_final.md`](docs/Auralis_preparation_final.md)
-   - [`docs/AURALIS_VS_OPENAI_BUILD_WEEK_2026_REQUIREMENTS.md`](docs/AURALIS_VS_OPENAI_BUILD_WEEK_2026_REQUIREMENTS.md)
-3. Treat those three documents as immutable snapshots and preserve the protected project history and tags.
-4. Verify the current branch, base commit, index, accessible working tree, scope, and rollback before editing.
-5. Never read, print, stage, or commit credentials or local environment contents.
-6. Use a short-lived branch, make the smallest approved change, and run validation proportional to that change.
+2. For current WebMCP work, read [`docs/WEBMCP_PLAN.md`](docs/WEBMCP_PLAN.md) and bind claims to the current runtime, tests, branch, and evidence layer.
+3. Read the three immutable Build Week documents only when original product intent or historical provenance is relevant; do not apply their competition requirements to the WebMCP Challenge.
+4. Preserve those snapshots, protected history, and tags.
+5. Verify the current branch, base commit, index, accessible working tree, scope, and rollback before editing.
+6. Never read, print, stage, or commit credentials or local environment contents.
+7. Use a short-lived branch, make the smallest approved change, and run validation proportional to that change.
 
 For runtime work, the important authority split is simple: `ExperienceState` owns product truth, deterministic browser code owns audio and safety, and GPT is an optional explanatory layer.
 
 ## How Codex and GPT-5.6 were used
+
+### Original Auralis / OpenAI Build Week 2026
 
 Codex was the primary engineering environment for Auralis. It accelerated three concrete stages: converting the frozen product intent and Build Week rules into a risk map, vertical slice, system design, and dependency boundaries; implementing the reducer-driven seven-screen journey and deterministic Web Audio pipeline; and running unit, dependency, build, Playwright, accessibility, production, and rollback validation.
 
@@ -217,6 +322,12 @@ This division is intentional:
 - automated journeys intercept the model route rather than spending API credits;
 - live Terra quality was separately reviewed by the owner in a controlled local environment.
 
+### WebMCP Challenge extension
+
+Codex was then used as the owner-controlled engineering and review environment for the later WebMCP extension. The work added the public tool contract, shared `ExperienceState` transitions, revision and replay guards, browser registration, bounded session waiting, agent-only reveal, channel-aware guidance, playback custody, agent-mode visual design, generated-asset provenance, focused automated tests, independent reviews, and rollback checkpoints. The owner retained every human gate and separately validated native text, voice, listening, Stop, and Preview behavior.
+
+GPT-5.6 Terra remains only the optional server-side explanation layer in the original human flow. The WebMCP-guided session uses the model in the external compatible host as an agent consuming page-owned semantic tools; Auralis does not send its raw audiograms to that host, give the host control over deterministic DSP, or replace consent, physical-volume acknowledgement, playback grant, and Stop with model decisions.
+
 ## Repository map
 
 ```text
@@ -227,7 +338,7 @@ src/contracts/               Runtime request and response schemas
 src/server/                  Grounding, provider adapter, model tests
 public/media/family-dinner/  Approved synthetic manifest and four WAV stems
 tests/                       Intercepted smoke and full Live/Degraded journeys
-docs/                        Frozen product and competition authority
+docs/                        Current WebMCP contract plus preserved historical Build Week records
 ```
 
 ## Known boundaries
@@ -235,7 +346,7 @@ docs/                        Frozen product and competition authority
 - Auralis is illustrative and non-clinical; individual perception can differ.
 - A digital check cannot guarantee the user's physical headphone level.
 - The public deployment intentionally provides no shared OpenAI API key. Its deterministic journey remains complete and usable.
-- The supported minimum viewport for this Build Week release is **390 px**. At 320 px, the Listening family-scene strip has a known 41 px horizontal overflow accepted for this release; 320 px is not a technical pass.
+- The supported minimum viewport recorded for the original Build Week release is **390 px**. At 320 px, the original Listening family-scene strip has a known 41 px horizontal overflow accepted for that release; 320 px is not a technical pass.
 - Auralis is primarily intended for laptop and desktop use.
 - Local media verification requires Web Crypto, so use a trusted localhost origin or HTTPS.
 - The automated test browser is Chromium. Wider hardware, browser, assistive-technology, and output-device matrices are bounded owner validation rather than universal certification.
@@ -243,18 +354,19 @@ docs/                        Frozen product and competition authority
 
 ## Current public state
 
-- Canonical application: [https://auralis-build-week-2026.vercel.app](https://auralis-build-week-2026.vercel.app)
-- Production root and `/api/health`: HTTP 200, verified 21 July 2026
-- Public model mode: optional explanation truthfully Degrades because no shared key is configured
-- WebMCP BUILD-1, BUILD-2, structural BUILD-3A, and automated VERIFY-1: implemented and clean-candidate verified; local native typed/click live-session continuation passed on `b84d4c3`, while current voice, exact public Preview, dependency-remediation, and production verification remain pending
+- **Original production:** `main` remains at the pre-WebMCP public baseline `53fa83e`; [https://auralis-build-week-2026.vercel.app](https://auralis-build-week-2026.vercel.app) remains the canonical production URL until a separately authorized promotion.
+- **WebMCP public feature candidate:** `feat/webmcp-live-session-v1-6` is published through implementation checkpoint `2a856f0`, 27 linear commits above `53fa83e` before this documentation repair. It has not been merged to `main`.
+- **Preview:** the immutable `2a856f0` Preview was owner-observed as functional on September 2, 2026. It is access-protected; final evaluator access or submission credentials must be verified separately.
+- **Current source validation:** on September 2, 2026, `npm run typecheck`, all 80 focused WebMCP unit/adapter tests, and `npm run build` passed at `2a856f0` before this docs-only repair.
+- **Pending release gates:** documentation approval and commit, exact release-candidate freeze, owner-selected model benchmark, dependency/security disposition, explicit `main` merge, explicit Vercel production promotion, public video, and final submission.
 
 ## Project authority
 
-- [OpenAI Build Week 2026 requirements and recommendations](docs/OPENAI_BUILD_WEEK_2026_REQUIREMENTS_RECOMMENDATIONS.md)
-- [Auralis preparation](docs/Auralis_preparation_final.md)
-- [Auralis vs. OpenAI Build Week 2026 requirements](docs/AURALIS_VS_OPENAI_BUILD_WEEK_2026_REQUIREMENTS.md)
+- **Current WebMCP delivery contract:** [Auralis WebMCP public delivery plan](docs/WEBMCP_PLAN.md)
+- **Current external competition authority:** [WebMCP Challenge Official Rules](https://webmcp.devpost.com/rules)
+- **Historical immutable Build Week provenance:** [requirements snapshot](docs/OPENAI_BUILD_WEEK_2026_REQUIREMENTS_RECOMMENDATIONS.md), [original product preparation](docs/Auralis_preparation_final.md), and [original rules comparison](docs/AURALIS_VS_OPENAI_BUILD_WEEK_2026_REQUIREMENTS.md)
 
-These documents preserve the frozen intent and competition analysis. Current implementation truth is established by the checked-in runtime, tests, validated Git history, and production evidence.
+The three Build Week documents preserve the original intent and competition analysis but do not govern WebMCP Challenge deadlines or submission fields. Current implementation truth is established by checked-in runtime and tests; Git, automated checks, owner observation, Preview identity, and production each remain distinct evidence layers.
 
 ## License
 

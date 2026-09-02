@@ -8,7 +8,7 @@ It governs authority, phase order, interviews, change control, Git workflow, val
 
 The primary Codex task owns the main project decisions and most core functionality. Owner-facing communication defaults to Czech unless the owner explicitly switches language. This file is normative in English.
 
-In this contract, “primary Codex task” means the single user-visible Codex thread attached to this repository that owns project decisions, integration, most core functionality, and the future `/feedback` submission.
+In this contract, “primary Codex task” means the single user-visible Codex thread attached to this repository that owns project decisions, integration, most core functionality, and submission coordination. A task or session identifier is evidence only when current Official Rules or the current submission form explicitly requests it.
 
 No nested `AGENTS.md`, `AGENTS.override.md`, secondary governance document, or user-visible secondary main implementation task may be created without explicit human approval.
 
@@ -16,31 +16,36 @@ No nested `AGENTS.md`, `AGENTS.override.md`, secondary governance document, or u
 
 For competition rules, obligations, compliance, deadlines, judging, and submission requirements, verified Official Rules and official program terms are the highest external authority.
 
-Within the repository, read the following documents in this order:
+This repository preserves two distinct competition eras. Do not use one era's rules, deadlines, submission fields, or status as authority for the other.
+
+For the current **WebMCP Challenge** work, read repository authority in this order:
+
+1. `docs/WEBMCP_PLAN.md`
+   - Current public product, implementation, evidence, rollback, and release contract for the WebMCP extension.
+2. Runtime code and tests
+   - Implementation source of truth for actual tool, state, audio, safety, and evidence behavior.
+3. `README.md`
+   - Human entry point and concise current/historical boundary. It points to deeper canonical truth and must not redefine it.
+
+For the completed **OpenAI Build Week 2026** work, the following immutable files remain historical provenance in their original order:
 
 1. `docs/OPENAI_BUILD_WEEK_2026_REQUIREMENTS_RECOMMENDATIONS.md`
-   - Repository authority for competition requirements, compliance, deadlines, and submission obligations.
-
-Within `docs/OPENAI_BUILD_WEEK_2026_REQUIREMENTS_RECOMMENDATIONS.md`, only items classified as `MUST` or `CONDITIONAL MUST`, together with facts directly supported by current official sources, are binding requirements. `OFFICIAL SHOULD`, `PROJECT SHOULD`, and `INFO` items are advisory or contextual unless the human owner explicitly adopts them as project decisions.
-
 2. `docs/Auralis_preparation_final.md`
-   - Authority for the frozen product intent, target problem, intended user experience, and original product scope.
 3. `docs/AURALIS_VS_OPENAI_BUILD_WEEK_2026_REQUIREMENTS.md`
-   - Analytical authority for rules-driven comparison, gap analysis, and recommendations.
 
-The third document must not silently create product requirements or override either higher document.
+Their `MUST`, `CONDITIONAL MUST`, dates, categories, `/feedback` field, and status claims apply only to that earlier program. They preserve the original product intent and Build Week interpretation but are not current WebMCP Challenge authority.
 
 This `AGENTS.md` governs agent behavior and project process. It must not be used to override competition rules or silently redefine the product.
 
-`README.md`, subagent output, external research, and agent inference may provide context or evidence, but none of them may silently override the authority hierarchy.
+Subagent output, external research, and agent inference may provide context or evidence, but none of them may silently override the authority hierarchy.
 
-If a current primary source conflicts with a frozen repository source, stop, identify the exact conflict and impact, and request an explicit human decision.
+If a current primary source conflicts with the current WebMCP contract, stop, identify the exact conflict and impact, and request an explicit human decision. A difference from an immutable Build Week snapshot is not itself a conflict when it is explicitly recorded as later WebMCP work.
 
 ### 2.1 Auralis WebMCP public delivery authority
 
-For the Auralis WebMCP extension, `docs/WEBMCP_PLAN.md` is the subordinate public product and delivery contract. It defines the agent-guided product flow, tool and state contracts, human gates, implementation phases, acceptance evidence, rollback, and release boundaries.
+For the Auralis WebMCP extension, `docs/WEBMCP_PLAN.md` is the current public product and delivery contract. It defines the agent-guided product flow, tool and state contracts, human gates, implementation phases, acceptance evidence, rollback, and release boundaries.
 
-The WebMCP plan may not override competition rules, the authority hierarchy above, immutable baseline files, protected-file rules, human decision authority, or publication gates. Runtime code and tests remain the implementation source of truth. If the public plan, runtime, tests, or a higher authority conflict, stop and request an explicit human decision.
+The WebMCP plan may not override current competition rules, immutable baseline files, protected-file rules, human decision authority, or publication gates. It may record later decisions and implementation that supersede the original Build Week design without rewriting that historical record. Runtime code and tests remain the implementation source of truth. If the public plan, runtime, tests, or a higher authority conflict, stop and request an explicit human decision.
 
 ## 3. Locked and immutable files
 
@@ -82,7 +87,9 @@ When two human instructions conflict, surface the conflict. Follow the newest ex
 
 ## 5. Required project phase order
 
-The project must proceed in this order:
+### 5.1 Original Build Week delivery sequence — completed historical record
+
+The original Build Week project proceeded in this order:
 
 0. Repository bootstrap
 1. Authority and agent operating contract
@@ -97,7 +104,22 @@ The project must proceed in this order:
 10. Vertical slice implementation
 11. Architecture review after reality
 
-Skipping, combining, reordering, or starting phases early is prohibited without an explicit human decision.
+This sequence is retained as historical provenance. It is complete and must not be reused as the current WebMCP release state.
+
+### 5.2 Current WebMCP release sequence
+
+After functional WebMCP development, the current release sequence is:
+
+1. synchronize the public feature-branch history;
+2. audit and repair canonical documentation;
+3. freeze an exact release candidate;
+4. run the owner-selected model benchmark;
+5. merge to `main` only after explicit owner approval;
+6. deploy or promote production only after separate explicit owner approval;
+7. prepare and verify the demo video and submission package;
+8. submit only after a final rules and evidence gate.
+
+Skipping, combining, reordering, or starting a current release phase early is prohibited without an explicit human decision.
 
 A phase-completion approval does not authorize the next phase. The next phase requires a new explicit human instruction.
 
@@ -404,7 +426,7 @@ Do not create or select a license without a separate explicit human decision.
 
 External publication, deployment, submission, messaging, repository visibility changes, or sharing of conversation content requires explicit human approval.
 
-Do not invoke `/feedback` until the designated submission stage and a new explicit human instruction. Before any future feedback submission, review the shared session and logs for sensitive information.
+Do not invoke `/feedback` or disclose a task/session identifier unless current Official Rules or the current submission form explicitly requires it and the owner gives a new instruction. Before any authorized feedback submission, review the shared session and logs for sensitive information.
 
 ## 16. Reporting requirements
 

@@ -1,9 +1,27 @@
-# Resonant Canvas listening-loop repair — design QA history
+# Auralis WebMCP visual and interaction QA history
 
 This report preserves the local visual-verification checkpoints that preceded
-and support the current v1.6 candidate. Current contract and acceptance status
-remain authoritative in `docs/WEBMCP_PLAN.md`; paths below identify reproducible
-local QA outputs, not committed publication artifacts.
+and support the current `auralis-webmcp-v1.10` implementation. It is historical
+evidence, not the current release ledger. Current contract, competition boundary,
+and acceptance status remain authoritative in `docs/WEBMCP_PLAN.md`; paths below
+identify reproducible local QA outputs, not committed publication artifacts.
+
+## Current evidence boundary — September 2, 2026
+
+- Historical test counts and candidate labels below belong to their named V1.x
+  checkpoint and must not be presented as results for a later commit.
+- The current implementation checkpoint before the documentation repair is
+  `2a856f0783a1cef5bb3552720249ae03ae171dc2`.
+- At that checkpoint, `npm run typecheck`, 80 focused WebMCP unit/adapter tests,
+  and `npm run build` passed. The full Playwright suite was not rerun for the
+  documentation-only repair.
+- Owner-observed native text and voice sessions completed before the narrow
+  `712606a` playback-ownership instruction hardening. The exact `2a856f0`
+  Preview was then owner-observed as functional. The planned post-hardening
+  benchmark remains a separate release-candidate gate.
+- BTE v2 visual approval is owner evidence. Generated-media provenance remains
+  in the committed manifest; no local source reference or QA screenshot is a
+  public release artifact.
 
 ## V1.9 terminal-summary refinement candidate
 
@@ -25,8 +43,9 @@ Acceptance requires the existing regular, wide-desktop, and mobile centering,
 overflow, contrast, focus, no-model-call, terminal evidence, and disabled
 locator checks. It additionally requires the three new headings, the static
 asset, and the absence of the removed report/download controls. Owner visual
-review of BTE v2 passed on 2026-09-02; exact public Preview acceptance remains a
-separate release gate.
+review of BTE v2 passed on 2026-09-02; owner-observed functional acceptance of
+the exact `2a856f0` Preview was recorded later. Evaluator access and production
+promotion remain separate release gates.
 
 ## V1.6 live-session continuity boundary
 
@@ -157,7 +176,7 @@ The post-fix comparison found no remaining actionable P0, P1, or P2 issue.
 
 - [P3] Mobile may later collapse the `Shows` paragraph behind an accessible disclosure if shorter profile scanning becomes preferable to immediate explanation.
 - [P3] The final landing-to-agent liquid transition remains a later visual layer and is not silently included in this listening-loop repair.
-- [P3] Native host/voice discovery and physical audible-output proof remain VERIFY-0 evidence; mocked Playwright does not substitute for them.
+- [P3, historical at this checkpoint] Native host/voice discovery and physical audible-output proof remained VERIFY-0 evidence; later owner observations are recorded in the current evidence boundary above. Mocked Playwright still does not substitute for native-host evidence.
 
 ## Screen 4 compactness follow-up — 2026-08-30
 
