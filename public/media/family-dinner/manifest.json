@@ -32,7 +32,7 @@
   },
   "classification": "original synthetic generated media",
   "generatedAt": "2026-07-17T15:11:50.906529+00:00",
-  "lastUpdatedAt": "2026-09-01T20:32:50Z",
+  "lastUpdatedAt": "2026-09-02T15:48:13Z",
   "scene": {
     "title": "Greenhouse Plans After Dinner",
     "concept": "Three fictional adult relatives finish dinner while planning a Saturday repair of their neighborhood greenhouse. A fictional local evening-news bulletin and restrained kitchen-room ambience create competing but intelligible background sound.",
@@ -133,7 +133,10 @@
         "copyrightGuaranteed": false,
         "uniquenessGuaranteed": false,
         "ownerReviewRequired": true,
-        "ownerReviewCompleted": false,
+        "ownerReviewCompleted": true,
+        "ownerReviewCompletedAt": "2026-09-02",
+        "ownerReviewDecision": "approved",
+        "ownerReviewNote": "Approved by the owner as the BTE v2 educational illustration for the terminal summary.",
         "aiDisclosureRequired": true,
         "aiDisclosureLocation": "this generated-media manifest"
       }

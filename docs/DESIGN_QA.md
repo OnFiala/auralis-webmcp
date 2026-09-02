@@ -18,14 +18,15 @@ The future section contains general non-prescriptive correction information, a
 disabled audiologist locator with no location or network flow, and one static
 ImageGen ear-and-hearing-aid illustration. That image is not based on session
 data and is not presented as a hearing-aid fitting or predicted correction.
-Its provenance and pending owner review are recorded in the generated-media
-manifest.
+Its provenance and explicit owner approval on 2026-09-02 are recorded in the
+generated-media manifest.
 
 Acceptance requires the existing regular, wide-desktop, and mobile centering,
 overflow, contrast, focus, no-model-call, terminal evidence, and disabled
 locator checks. It additionally requires the three new headings, the static
-asset, and the absence of the removed report/download controls. Screenshots are
-local QA aids; publication remains blocked until owner visual review.
+asset, and the absence of the removed report/download controls. Owner visual
+review of BTE v2 passed on 2026-09-02; exact public Preview acceptance remains a
+separate release gate.
 
 ## V1.6 live-session continuity boundary
 
