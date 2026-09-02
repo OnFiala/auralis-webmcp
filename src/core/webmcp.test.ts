@@ -1130,14 +1130,25 @@ describe("Auralis WebMCP deterministic domain contract", () => {
       continuation: {
         action: "call-tool",
         tool: "play_listening_comparison",
-        instruction: expect.stringContaining("silent listening interval"),
+        instruction: expect.stringContaining(
+          "you are responsible for starting the current comparison",
+        ),
         waitInput: null,
         doNotEndTurn: true,
       },
     });
-    expect(
-      getAuralisState(agentPlayback).continuation.instruction,
-    ).not.toContain("write it in text mode or speak it in voice mode");
+    const playbackInstruction =
+      getAuralisState(agentPlayback).continuation.instruction;
+    expect(playbackInstruction).toContain(
+      "Never tell or ask the person to press Play",
+    );
+    expect(playbackInstruction).toContain(
+      "do not end the agent run before starting it",
+    );
+    expect(playbackInstruction).toContain("silent listening interval");
+    expect(playbackInstruction).not.toContain(
+      "write it in text mode or speak it in voice mode",
+    );
     play(agentPlayback, "reference");
     expect(getAuralisState(agentPlayback).allowedNextTools).toEqual([
       "get_auralis_state",

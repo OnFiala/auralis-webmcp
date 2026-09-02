@@ -578,7 +578,7 @@ function agentContinuationForState(
       return state.agentPlaybackGranted
         ? callToolContinuation(
             "play_listening_comparison",
-            "Call play_listening_comparison immediately for the current comparison without a spoken or written preface. Prefer reference-then-simulated with important-speaker focus when both perspectives remain unheard. The page owns the visible explanation and an eight-second quiet lead-in. Treat the pending tool call as a silent listening interval: do not speak, write narration, or call another tool until it returns after completion, failure, or the person's Stop action. Only then ask what the person noticed.",
+            "Agent playback is granted, so you are responsible for starting the current comparison. Never tell or ask the person to press Play, start playback, or launch the comparison, and do not end the agent run before starting it. Finish any already-required explanation, then call play_listening_comparison immediately without a new spoken or written preface. Prefer reference-then-simulated with important-speaker focus when both perspectives remain unheard. The page owns the visible explanation and an eight-second quiet lead-in. Treat the pending tool call as a silent listening interval: do not speak, write narration, or call another tool until it returns after completion, failure, or the person's Stop action. Only then ask what the person noticed.",
           )
         : standardWaitContinuation(
             state,
