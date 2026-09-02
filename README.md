@@ -355,10 +355,11 @@ docs/                        Current WebMCP contract plus preserved historical B
 ## Current public state
 
 - **Original production:** `main` remains at the pre-WebMCP public baseline `53fa83e`; [https://auralis-build-week-2026.vercel.app](https://auralis-build-week-2026.vercel.app) remains the canonical production URL until a separately authorized promotion.
-- **WebMCP public feature candidate:** `feat/webmcp-live-session-v1-6` is published through implementation checkpoint `2a856f0`, 27 linear commits above `53fa83e` before this documentation repair. It has not been merged to `main`.
+- **WebMCP implementation checkpoint:** `2a856f0` contains the current runtime, 27 linear commits above `53fa83e`. Documentation-only commits above that checkpoint do not change the runtime candidate. The WebMCP work has not been merged to `main`.
+- **Last verified public refs:** at the pre-publication check on September 2, 2026 at 17:00 UTC, `feat/webmcp-live-session-v1-6` resolved to `2a856f0` and `main` resolved to `53fa83e`. This is dated external evidence, not a self-updating branch-status claim; every later publication or release gate must re-read the live refs.
 - **Preview:** the immutable `2a856f0` Preview was owner-observed as functional on September 2, 2026. It is access-protected; final evaluator access or submission credentials must be verified separately.
 - **Current source validation:** on September 2, 2026, `npm run typecheck`, all 80 focused WebMCP unit/adapter tests, and `npm run build` passed at `2a856f0` before this docs-only repair.
-- **Pending release gates:** documentation approval and commit, exact release-candidate freeze, owner-selected model benchmark, dependency/security disposition, explicit `main` merge, explicit Vercel production promotion, public video, and final submission.
+- **Remaining owner-gated release sequence:** bind and verify the exact public feature ref, freeze an exact release candidate, run the owner-selected model benchmark, close the dependency/security disposition, explicitly merge to `main`, separately promote Vercel production, prepare the public video, and pass the final submission gate.
 
 ## Project authority
 
