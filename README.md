@@ -4,6 +4,30 @@
 
 **Auralis** is the product. **Auralis WebMCP** is the current shared human-agent edition.
 
+## Judge quick start — five minutes
+
+**Live app:** [auralis-build-week-2026.vercel.app](https://auralis-build-week-2026.vercel.app)
+
+**Public source:** [github.com/OnFiala/auralis-webmcp](https://github.com/OnFiala/auralis-webmcp)
+
+Auralis is a non-diagnostic listening experience for families. WebMCP turns the existing human journey into a shared live session: the agent uses page-owned semantic tools, the interface performs a full Agent Reveal, and the person retains consent, listening-level, playback, and Stop authority.
+
+1. Open the live app in the ChatGPT desktop app's built-in browser and use **GPT-5.6 Sol or GPT-5.6 Terra** with Site Tools enabled.
+2. In the browser address bar, open **Site tools → Available site tools** to inspect the seven Auralis tools.
+3. Tell the agent: **“Start a guided Auralis family listening session. Use the page's Site Tools, explain each step in English, and continue waiting for my visible choices.”**
+4. Confirm the illustrative consent, choose a synthetic demo audiogram, set a comfortable headphone level, and optionally allow agent-started playback.
+5. Listen to A then B, describe the difference in everyday language, try one suggested change such as turning the television off, and review the deterministic summary.
+
+| WebMCP tool | What it lets the agent do |
+|---|---|
+| `get_auralis_state` | Read the current phase, allowed next tools, grounded choices, and human gate. |
+| `stage_demo_session` | Start Agent Reveal or select one approved synthetic demo profile after consent. |
+| `prepare_comparison` | Prepare the baseline or one bounded single-variable adaptation. |
+| `play_listening_comparison` | Start authorized A, B, or A-then-B playback while preserving human Stop. |
+| `record_user_observation` | Translate only the person's stated experience into bounded non-diagnostic evidence. |
+| `get_session_evidence` | Read the sanitized ordered session record and summary readiness. |
+| `wait_for_session_change` | Wait on the current revision for human or technical progress without model polling. |
+
 ## What Auralis is
 
 Auralis turns an audiogram into a guided listening comparison. A user chooses an illustrative hearing profile, enters the same 64-second family scene, compares the source reference with a deterministic profile result, and then tries changes such as reducing television sound or moving the important speaker closer.
@@ -12,10 +36,10 @@ Auralis is an educational, non-clinical experience. It does not diagnose hearing
 
 The product is designed for a family member, partner, or friend who wants to understand why an everyday conversation may become difficult. Its core proof is deliberately simple: keep the people, words, timing, and source scene the same, then change only the illustrated listening conditions. The person can hear both perspectives and describe the difference in ordinary language.
 
-- **Historical Build Week production URL:** [auralis-build-week-2026.vercel.app](https://auralis-build-week-2026.vercel.app), sourced from the pre-WebMCP `main` history
+- **Live Auralis WebMCP production:** [auralis-build-week-2026.vercel.app](https://auralis-build-week-2026.vercel.app), publicly accessible without Vercel authentication
 - **Pre-WebMCP public baseline:** [`53fa83e188a0c5e076c5a0f651f2d937b167954d`](https://github.com/OnFiala/auralis-webmcp/commit/53fa83e188a0c5e076c5a0f651f2d937b167954d); the original runtime implementation was established at [`384ece76a29ab4f3c82e69e1bc1c585044d82c29`](https://github.com/OnFiala/auralis-webmcp/commit/384ece76a29ab4f3c82e69e1bc1c585044d82c29)
-- **WebMCP release candidate base:** [`213f5728c0d32e5cf2ddf4d7cb7aef49bd4e280d`](https://github.com/OnFiala/auralis-webmcp/commit/213f5728c0d32e5cf2ddf4d7cb7aef49bd4e280d) on [`feat/webmcp-live-session-v1-6`](https://github.com/OnFiala/auralis-webmcp/tree/feat/webmcp-live-session-v1-6); `2a856f0` remains the pre-release feature checkpoint
-- **WebMCP Preview:** [exact `213f572` deployment](https://auralis-webmcp-ja64expdi-build-week2026.vercel.app), owner-observed through a complete functional walkthrough on September 2, 2026; final judge access remains a submission gate
+- **Released WebMCP source:** [`7ee10c9471a8242691d49018f465701a7e6991af`](https://github.com/OnFiala/auralis-webmcp/commit/7ee10c9471a8242691d49018f465701a7e6991af) on `main`; `213f572` remains the verified security/dependency base and `2a856f0` the completed feature checkpoint before release-only work
+- **Production evidence:** Vercel deployment `dpl_3ZxHa8qmfb1bvCP4Zq2aKQKge8gg` was verified Ready and source-bound to exact `7ee10c9` on September 2, 2026; use the public production URL above rather than an access-protected Preview
 - **OpenAI API key:** optional; the complete deterministic journey works without one
 
 ## Two development eras
@@ -35,7 +59,7 @@ The July 2026 project created the complete human-controlled foundation:
 - one optional sanitized GPT-5.6 Terra explanation that never controls the audio;
 - automated validation, public deployment, and the original governance and design history.
 
-That original application is preserved on `main` through `53fa83e`. Its immutable Build Week documents remain historical provenance. Their dates, category, `/feedback` field, and submission rules do not govern the later WebMCP Challenge.
+That original application is preserved in public history through `53fa83e`; the WebMCP work is additive above that exact baseline on `main`. Its immutable Build Week documents remain historical provenance. Their dates, category, `/feedback` field, and submission rules do not govern the later WebMCP Challenge.
 
 ### Auralis WebMCP — WebMCP Challenge
 
@@ -119,7 +143,7 @@ If the person hears no clear difference, the agent is instructed to explain what
 
 ## WebMCP implementation details
 
-This feature branch adds the deterministic WebMCP foundation for an agent-guided Auralis session while preserving the complete human journey.
+The released WebMCP extension adds the deterministic foundation for an agent-guided Auralis session while preserving the complete human journey.
 
 The implemented foundation includes:
 
@@ -141,7 +165,7 @@ The active synthetic preset set is `auralis-synthetic-presets-v2`. It moves ever
 
 The family mix uses the versioned `auralis-family-mix-v3` plan. While the television is on, its unchanged stem receives one bounded +8 dB broadband gain in the same A/B source mix before the per-ear profile filters; the complete mix reserves deterministic -1.5 dB headroom, and turning the television off removes that contribution completely. Keeping the gain identical in A and B preserves the same-source comparison while making television masking more audible once the synthetic profile reduces speech detail. The preferred adaptation order is TV off, then left-ear support. Moving the speaker closer and bilateral support remain available only when the person explicitly requests another option. The session remains bounded to two adaptations.
 
-The structural Agent Reveal UI and selected `Resonant Canvas` agent-mode visual layer are versioned in `8711001`, with the V1.4 television-masking and adaptation-order delta in `6b93385`. The public-safe design history is recorded in [`docs/DESIGN_QA.md`](docs/DESIGN_QA.md). The current text/voice evidence and owner-observed Preview result are recorded as owner evidence rather than inferred from automated tests. Dependency/security remediation and the owner-selected benchmark are complete. Main integration with its automatic Production deployment, production verification, video, and submission remain gated release work. See [`docs/WEBMCP_PLAN.md`](docs/WEBMCP_PLAN.md) for the canonical current status.
+The structural Agent Reveal UI and selected `Resonant Canvas` agent-mode visual layer are versioned in `8711001`, with the V1.4 television-masking and adaptation-order delta in `6b93385`. The public-safe design history is recorded in [`docs/DESIGN_QA.md`](docs/DESIGN_QA.md). The current text/voice evidence and owner-observed Preview result are recorded as owner evidence rather than inferred from automated tests. Dependency/security remediation, the owner-selected benchmark, `main` integration, automatic Production deployment, and production verification are complete. Video and final submission remain separate gates. See [`docs/WEBMCP_PLAN.md`](docs/WEBMCP_PLAN.md) for the canonical current status.
 
 ## Original human experience
 
@@ -357,12 +381,11 @@ docs/                        Current WebMCP contract plus preserved historical B
 ## Current public state
 
 - **Platform identity:** the public repository is [`OnFiala/auralis-webmcp`](https://github.com/OnFiala/auralis-webmcp), the Vercel project is `auralis-webmcp`, and package metadata uses the same slug. The GitHub repository ID `1299645530` and Vercel project ID `prj_o5dsyt7SK4WjWpSRuLF467ZpIYjs` were preserved through the naming cutover.
-- **Original production:** at this repair's preparation boundary, `main` remains at the pre-WebMCP public baseline `53fa83e`; [https://auralis-build-week-2026.vercel.app](https://auralis-build-week-2026.vercel.app) remains the canonical production URL until the authorized `main` integration completes and the resulting Production deployment is verified.
-- **Release-candidate lineage:** `2a856f0` is the pre-release feature checkpoint. Exact base `213f572` contains 35 linear commits above `53fa83e`, including the bounded model-route repair `ba473bd` and the updated dependency baseline `213f572`. This release-state documentation change is intentionally documentation-only; its resulting commit becomes the final merge candidate after publication and a fresh exact-hash preflight.
-- **Last verified public refs:** on September 2, 2026, `feat/webmcp-live-session-v1-6` resolved to exact `213f5728c0d32e5cf2ddf4d7cb7aef49bd4e280d` with local/public divergence `0/0`, while public `main` remained `53fa83e188a0c5e076c5a0f651f2d937b167954d`. This is a dated receipt; the documentation commit, push, and merge gates must each re-read the live refs.
-- **Preview and owner evidence:** GitHub deployment receipt `6230567527` and the Vercel status report success for exact `213f572` at [auralis-webmcp-ja64expdi-build-week2026.vercel.app](https://auralis-webmcp-ja64expdi-build-week2026.vercel.app). The owner completed a full functional walkthrough of that exact Preview. Preview access is protected; final evaluator access or submission credentials remain a submission gate.
-- **Current validation:** exact `213f572` passed a clean install, production and full dependency audits with zero vulnerabilities, 17 model tests, 80 WebMCP tests, 45 core tests, typecheck, Dependency Cruiser, production build, smoke, two human journeys, and nine WebMCP browser journeys. The owner-selected model benchmark passed on the immediately preceding release candidate; the exact post-repair Preview then passed the complete owner walkthrough. At the owner's direction, the final gate did not re-read `OPENAI_API_KEY`; its absence is owner-reported rather than independently reverified here. The deterministic journey remains complete without it.
-- **Merge/deployment decision:** Git integration and Production Branch `main` remain enabled. For this release, the owner accepts that the exact fast-forward push to `main` may automatically start Vercel Production; merge and that automatic deployment are therefore one coupled, explicitly hash-bound release action. Production identity, behavior, canonical URL, and rollback must still be verified after the push. Video preparation and final submission remain later gates.
+- **Released source:** the WebMCP product release is anchored at exact [`7ee10c9471a8242691d49018f465701a7e6991af`](https://github.com/OnFiala/auralis-webmcp/commit/7ee10c9471a8242691d49018f465701a7e6991af). On September 2, 2026, both `main` and `feat/webmcp-live-session-v1-6` were verified at that SHA with clean `0/0` upstream divergence. This judge-facing documentation repair is post-release and changes no product code.
+- **Production:** Vercel Production deployment `dpl_3ZxHa8qmfb1bvCP4Zq2aKQKge8gg` was verified `READY/PROMOTED` and source-bound to `main` at exact `7ee10c9`. [https://auralis-build-week-2026.vercel.app](https://auralis-build-week-2026.vercel.app) returned anonymous HTTP 200, exposed that deployment identity, and returned `status: ok` from `/api/health` at the release gate.
+- **Release lineage:** `53fa83e` is the preserved pre-WebMCP baseline, `2a856f0` is the completed V1.10 feature checkpoint before release-only work, and `213f572` is the verified security/dependency base. The linear public history above `53fa83e` distinguishes the WebMCP work created during the Challenge period.
+- **Validation and owner evidence:** exact `213f572` passed the full clean release suite, dependency audits, production build, human journeys, and nine WebMCP browser journeys. The owner then completed the full exact Preview walkthrough. After release, the public Production URL passed its smoke check and a fresh nine-scenario production-targeted WebMCP journey. These automated page-side checks and owner-observed native sessions remain distinct evidence layers.
+- **Access and remaining gates:** the canonical production URL is public and requires no submitted credentials. Access-protected Preview and deployment-specific URLs are retained only as dated evidence, not as the judge entry point. Product development, `main` integration, and Production verification are complete; the public video and final Devpost submission remain open.
 
 ## Project authority
 
