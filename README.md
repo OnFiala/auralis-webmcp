@@ -13,8 +13,8 @@ Auralis is an educational, non-clinical experience. It does not diagnose hearing
 The product is designed for a family member, partner, or friend who wants to understand why an everyday conversation may become difficult. Its core proof is deliberately simple: keep the people, words, timing, and source scene the same, then change only the illustrated listening conditions. The person can hear both perspectives and describe the difference in ordinary language.
 
 - **Historical Build Week production URL:** [auralis-build-week-2026.vercel.app](https://auralis-build-week-2026.vercel.app), sourced from the pre-WebMCP `main` history
-- **Pre-WebMCP public baseline:** [`53fa83e188a0c5e076c5a0f651f2d937b167954d`](https://github.com/OnFiala/auralis-build-week-2026/commit/53fa83e188a0c5e076c5a0f651f2d937b167954d); the original runtime implementation was established at [`384ece76a29ab4f3c82e69e1bc1c585044d82c29`](https://github.com/OnFiala/auralis-build-week-2026/commit/384ece76a29ab4f3c82e69e1bc1c585044d82c29)
-- **WebMCP implementation checkpoint:** [`2a856f0783a1cef5bb3552720249ae03ae171dc2`](https://github.com/OnFiala/auralis-build-week-2026/commit/2a856f0783a1cef5bb3552720249ae03ae171dc2) on [`feat/webmcp-live-session-v1-6`](https://github.com/OnFiala/auralis-build-week-2026/tree/feat/webmcp-live-session-v1-6)
+- **Pre-WebMCP public baseline:** [`53fa83e188a0c5e076c5a0f651f2d937b167954d`](https://github.com/OnFiala/auralis-webmcp/commit/53fa83e188a0c5e076c5a0f651f2d937b167954d); the original runtime implementation was established at [`384ece76a29ab4f3c82e69e1bc1c585044d82c29`](https://github.com/OnFiala/auralis-webmcp/commit/384ece76a29ab4f3c82e69e1bc1c585044d82c29)
+- **WebMCP implementation checkpoint:** [`2a856f0783a1cef5bb3552720249ae03ae171dc2`](https://github.com/OnFiala/auralis-webmcp/commit/2a856f0783a1cef5bb3552720249ae03ae171dc2) on [`feat/webmcp-live-session-v1-6`](https://github.com/OnFiala/auralis-webmcp/tree/feat/webmcp-live-session-v1-6)
 - **WebMCP Preview:** [immutable candidate deployment](https://auralis-build-week-2026-jnqqycexk-build-week2026.vercel.app), owner-observed as functional on September 2, 2026; production promotion and final judge-access verification remain separate gates
 - **OpenAI API key:** optional; the complete deterministic journey works without one
 
@@ -39,7 +39,7 @@ That original application is preserved on `main` through `53fa83e`. Its immutabl
 
 ### Auralis WebMCP — WebMCP Challenge
 
-The later work turns the same trusted listening core into a shared human-agent experience. The current competition period began on August 25, 2026. Owner records place WebMCP work no later than August 28; public Git evidence begins with [`8af992e`](https://github.com/OnFiala/auralis-build-week-2026/commit/8af992e8d9454060d07979eae9c6c9a23fc64bb2) on August 29, directly above the preserved `53fa83e` baseline.
+The later work turns the same trusted listening core into a shared human-agent experience. The current competition period began on August 25, 2026. Owner records place WebMCP work no later than August 28; public Git evidence begins with [`8af992e`](https://github.com/OnFiala/auralis-webmcp/commit/8af992e8d9454060d07979eae9c6c9a23fc64bb2) on August 29, directly above the preserved `53fa83e` baseline.
 
 The new public feature history adds:
 
@@ -171,8 +171,8 @@ No database, account, cloud storage, separate media setup, or OpenAI credential 
 ### 1. Clone your fork
 
 ```bash
-git clone https://github.com/YOUR_GITHUB_USERNAME/auralis-build-week-2026.git
-cd auralis-build-week-2026
+git clone https://github.com/YOUR_GITHUB_USERNAME/auralis-webmcp.git
+cd auralis-webmcp
 npm ci
 ```
 
@@ -356,12 +356,13 @@ docs/                        Current WebMCP contract plus preserved historical B
 
 ## Current public state
 
+- **Platform identity:** the public repository is [`OnFiala/auralis-webmcp`](https://github.com/OnFiala/auralis-webmcp), the Vercel project is `auralis-webmcp`, and package metadata uses the same slug. The GitHub repository ID `1299645530` and Vercel project ID `prj_o5dsyt7SK4WjWpSRuLF467ZpIYjs` were preserved through the naming cutover.
 - **Original production:** `main` remains at the pre-WebMCP public baseline `53fa83e`; [https://auralis-build-week-2026.vercel.app](https://auralis-build-week-2026.vercel.app) remains the canonical production URL until a separately authorized promotion.
-- **WebMCP implementation checkpoint:** `2a856f0` contains the current runtime, 27 linear commits above `53fa83e`. Documentation-only commits above that checkpoint do not change the runtime candidate. The WebMCP work has not been merged to `main`.
-- **Last verified public refs:** at the pre-publication check on September 2, 2026 at 17:00 UTC, `feat/webmcp-live-session-v1-6` resolved to `2a856f0` and `main` resolved to `53fa83e`. This is dated external evidence, not a self-updating branch-status claim; every later publication or release gate must re-read the live refs.
+- **WebMCP implementation checkpoint:** `2a856f0` contains the current runtime, 27 linear commits above `53fa83e`. Release documentation and package-identity metadata above that checkpoint do not change application source, dependencies, scripts, or runtime behavior. The WebMCP work has not been merged to `main`.
+- **Last verified public refs:** immediately before the naming cutover on September 2, 2026, `feat/webmcp-live-session-v1-6` resolved to `791a1a7` and `main` resolved to `53fa83e`. This is dated external evidence, not a self-updating branch-status claim; every later publication or release gate must re-read the live refs.
 - **Preview:** the immutable `2a856f0` Preview was owner-observed as functional on September 2, 2026. It is access-protected; final evaluator access or submission credentials must be verified separately.
-- **Current source validation:** on September 2, 2026, `npm run typecheck`, all 80 focused WebMCP unit/adapter tests, and `npm run build` passed at `2a856f0` before this docs-only repair.
-- **Remaining owner-gated release sequence:** bind and verify the exact public feature ref, freeze an exact release candidate, run the owner-selected model benchmark, close the dependency/security disposition, explicitly merge to `main`, separately promote Vercel production, prepare the public video, and pass the final submission gate.
+- **Current source validation:** on September 2, 2026, `npm run typecheck`, all 80 focused WebMCP unit/adapter tests, and `npm run build` passed at runtime checkpoint `2a856f0`. For the post-cutover source-alignment candidate, `npm run typecheck` passed and `npm ls --depth=0` exited successfully while reporting the pre-existing local `@emnapi/runtime@1.11.2` as extraneous. The runtime suites were not repeated because application source, dependencies, scripts, tests, and public assets did not change.
+- **Remaining owner-gated release sequence:** publish and verify this source naming alignment, freeze an exact release candidate, run the owner-selected model benchmark, close the dependency/security disposition, explicitly merge to `main`, separately promote Vercel production and update the canonical URL, prepare the public video, and pass the final submission gate.
 
 ## Project authority
 

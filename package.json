@@ -1,8 +1,8 @@
 {
-  "name": "auralis-build-week-2026",
+  "name": "auralis-webmcp",
   "version": "0.0.0",
   "private": true,
-  "description": "An illustrative, non-clinical deterministic Auralis hearing experience for OpenAI Build Week 2026.",
+  "description": "An illustrative, non-clinical Auralis WebMCP experience for shared human-agent listening comparisons.",
   "engines": {
     "node": "22.x"
   },
