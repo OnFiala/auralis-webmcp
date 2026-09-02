@@ -2,6 +2,8 @@
 
 > See what hearing sounds like.
 
+**Auralis** is the product. **Auralis WebMCP** is the current shared human-agent edition.
+
 ## What Auralis is
 
 Auralis turns an audiogram into a guided listening comparison. A user chooses an illustrative hearing profile, enters the same 64-second family scene, compares the source reference with a deterministic profile result, and then tries changes such as reducing television sound or moving the important speaker closer.
@@ -10,7 +12,7 @@ Auralis is an educational, non-clinical experience. It does not diagnose hearing
 
 The product is designed for a family member, partner, or friend who wants to understand why an everyday conversation may become difficult. Its core proof is deliberately simple: keep the people, words, timing, and source scene the same, then change only the illustrated listening conditions. The person can hear both perspectives and describe the difference in ordinary language.
 
-- **Original Build Week production:** [auralis-build-week-2026.vercel.app](https://auralis-build-week-2026.vercel.app), sourced from the pre-WebMCP `main` history
+- **Historical Build Week production URL:** [auralis-build-week-2026.vercel.app](https://auralis-build-week-2026.vercel.app), sourced from the pre-WebMCP `main` history
 - **Pre-WebMCP public baseline:** [`53fa83e188a0c5e076c5a0f651f2d937b167954d`](https://github.com/OnFiala/auralis-build-week-2026/commit/53fa83e188a0c5e076c5a0f651f2d937b167954d); the original runtime implementation was established at [`384ece76a29ab4f3c82e69e1bc1c585044d82c29`](https://github.com/OnFiala/auralis-build-week-2026/commit/384ece76a29ab4f3c82e69e1bc1c585044d82c29)
 - **WebMCP implementation checkpoint:** [`2a856f0783a1cef5bb3552720249ae03ae171dc2`](https://github.com/OnFiala/auralis-build-week-2026/commit/2a856f0783a1cef5bb3552720249ae03ae171dc2) on [`feat/webmcp-live-session-v1-6`](https://github.com/OnFiala/auralis-build-week-2026/tree/feat/webmcp-live-session-v1-6)
 - **WebMCP Preview:** [immutable candidate deployment](https://auralis-build-week-2026-jnqqycexk-build-week2026.vercel.app), owner-observed as functional on September 2, 2026; production promotion and final judge-access verification remain separate gates
