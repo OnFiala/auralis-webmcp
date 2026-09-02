@@ -15,7 +15,7 @@
     "test:core": "vitest run src/core/core.test.ts",
     "test:webmcp": "vitest run src/core/webmcp.test.ts src/browser/webmcp.test.ts",
     "test:webmcp:journey": "playwright test tests/webmcp.spec.ts",
-    "test:model": "vitest run src/server/model.test.ts",
+    "test:model": "vitest run src/server/model.test.ts src/app/api/model/route.test.ts",
     "test:smoke": "playwright test tests/smoke.spec.ts",
     "test:journey": "playwright test tests/journey.spec.ts",
     "check": "npm run typecheck && npm run check:deps && npm run test:core && npm run test:webmcp && npm run test:model && npm run build && npm run test:smoke && npm run test:journey && npm run test:webmcp:journey"

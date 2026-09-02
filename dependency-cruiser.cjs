@@ -11,7 +11,7 @@ module.exports = {
       name: "no-unresolvable",
       severity: "error",
       from: {},
-      to: { couldNotResolve: true },
+      to: { couldNotResolve: true, pathNot: "^server-only$" },
     },
     {
       name: "no-browser-to-server",

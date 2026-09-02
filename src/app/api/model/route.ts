@@ -21,6 +21,44 @@ function invalidRequestResponse(): Response {
   );
 }
 
+async function readBoundedRequestBody(request: Request): Promise<string> {
+  if (request.body === null) {
+    return "";
+  }
+
+  const reader = request.body.getReader();
+  const decoder = new TextDecoder();
+  let body = "";
+  let bytesRead = 0;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+
+      if (done) {
+        body += decoder.decode();
+        return body;
+      }
+
+      bytesRead += value.byteLength;
+
+      if (bytesRead > MAX_MODEL_REQUEST_BYTES) {
+        try {
+          await reader.cancel();
+        } catch {
+          // Preserve the bounded validation result even if the source rejects cancellation.
+        }
+
+        throw new ModelRequestValidationError();
+      }
+
+      body += decoder.decode(value, { stream: true });
+    }
+  } finally {
+    reader.releaseLock();
+  }
+}
+
 export async function POST(request: Request): Promise<Response> {
   const contentLength = request.headers.get("content-length");
 
@@ -33,7 +71,7 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   try {
-    const body = await request.text();
+    const body = await readBoundedRequestBody(request);
     const modelRequest = parseModelExplanationRequestText(body);
     const result = await explainCurrentExperience(
       modelRequest,

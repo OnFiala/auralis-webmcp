@@ -1,3 +1,5 @@
+import "server-only";
+
 import OpenAI from "openai";
 import { zodTextFormat } from "openai/helpers/zod";
 
