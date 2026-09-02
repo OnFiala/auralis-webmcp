@@ -1,12 +1,19 @@
 # ADR-0004: Trusted OpenAI gateway and exact model contract
 
-- **Status:** Accepted
+- **Status:** Superseded for the current implementation; retained as an accepted original Build Week decision
 - **Date:** July 15, 2026
 - **Decision owners:** Human owner; primary Codex task
 - **Related Phase 5 decisions:** P5-D05
 - **Related product commitments:** Live GPT-5.6 structured contribution and grounded explanation
 - **Related risks:** RISK-AI-01, RISK-AI-03, RISK-SEC-02, RISK-COMP-01
 - **Related vertical-slice criteria:** VS-AC-17–VS-AC-18, VS-AC-21–VS-AC-22, VS-AC-28
+
+> **Current implementation note (September 2, 2026):** The shipped optional
+> explanation route uses exact model `gpt-5.6-terra` with low reasoning through
+> the same trusted server boundary. The deterministic Auralis and WebMCP paths
+> do not depend on that request. This later implementation supersedes the exact
+> `gpt-5.6-sol` / `xhigh` choice below without altering the historical decision.
+> Current runtime truth is `src/contracts/runtime.ts` and `src/server/openai.ts`.
 
 ## Decision
 

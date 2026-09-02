@@ -1,5 +1,12 @@
 # Auralis Present-Time File Tree
 
+> **Historical scope notice (September 2, 2026):** “Present-time” refers to the
+> original OpenAI Build Week 2026 Phase 7/10 checkpoint in July. This is not an
+> inventory of the later WebMCP branch and intentionally omits its contracts,
+> browser adapter, agent presentation, tests, and assets. See `README.md` and
+> `docs/WEBMCP_PLAN.md` for current WebMCP structure. The original file-tree
+> record below remains unchanged.
+
 ## 1. Title and status
 
 **Status:** Approved Phase 7 present-time file tree; Phase 10 complete

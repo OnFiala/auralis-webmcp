@@ -1,12 +1,19 @@
 # ADR-0009: Bounded two-stage GPT lifecycle with honest degraded behavior
 
-- **Status:** Accepted
+- **Status:** Superseded for the current implementation; retained as an accepted original Build Week decision
 - **Date:** July 15, 2026
 - **Decision owners:** Human owner; primary Codex task
 - **Related Phase 5 decisions:** P5-D10, P5-D18
 - **Related product commitments:** Fresh scene intelligence, grounded explanation, transparent outage and retry
 - **Related risks:** RISK-AI-01, RISK-AI-03, RISK-DEMO-01, RISK-DOC-01
 - **Related vertical-slice criteria:** VS-AC-17–VS-AC-18, VS-AC-20–VS-AC-21, VS-AC-25, VS-AC-28
+
+> **Current implementation note (September 2, 2026):** Auralis implements one
+> optional stateless GPT operation, `explain-current-experience`, after a
+> deterministic result. It does not generate scene text through GPT. The
+> deterministic experience and the WebMCP final summary complete without a
+> model call. The two-stage lifecycle below remains historical design context.
+> Current runtime truth is `src/contracts/runtime.ts` and `src/server/model.ts`.
 
 ## Decision
 

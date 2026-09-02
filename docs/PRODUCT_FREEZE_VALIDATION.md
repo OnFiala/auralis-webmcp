@@ -1,5 +1,12 @@
 # Auralis Product Freeze Validation
 
+> **Historical scope notice (September 2, 2026):** This document records the
+> original OpenAI Build Week 2026 Phase 2 decision. Its use of “current”, phase
+> status, competition scope, and submission requirements is historical and does
+> not govern the later WebMCP Challenge extension. See `README.md` and
+> `docs/WEBMCP_PLAN.md` for current WebMCP truth. The original decision below is
+> preserved rather than rewritten.
+
 **Status:** Phase 2 validation record  
 **Decision date:** July 14, 2026  
 **Scope:** Product freeze validation only

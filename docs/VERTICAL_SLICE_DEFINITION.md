@@ -1,5 +1,12 @@
 # Auralis Vertical Slice Definition
 
+> **Historical scope notice (September 2, 2026):** This document defines the
+> original OpenAI Build Week 2026 Phase 4 slice. Its manual-audiogram scope,
+> deadline, acceptance state, and competition authority are not the current
+> WebMCP Challenge delivery contract. See `README.md` and
+> `docs/WEBMCP_PLAN.md` for the later WebMCP extension. The original slice below
+> is preserved as provenance.
+
 **Status:** Decision-complete Phase 4 definition; acceptance evidence not executed  
 **Definition date:** July 14, 2026  
 **Owner decisions:** P4-D01 through P4-D14 approved on July 14, 2026  

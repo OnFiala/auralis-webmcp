@@ -1,5 +1,12 @@
 # Auralis Just-Enough System Design
 
+> **Historical scope notice (September 2, 2026):** This is the original OpenAI
+> Build Week 2026 Phase 5 design, written before implementation. Statements that
+> no implementation or validation existed are true only at that July checkpoint.
+> Later WebMCP architecture and current evidence are owned by `README.md`,
+> `docs/WEBMCP_PLAN.md`, runtime code, and tests. The design below is not being
+> retroactively rewritten.
+
 **Status:** Approved, published and formally closed Phase 5 system design  
 **Date:** July 15, 2026  
 **Scope:** Manual-Audiogram Critical-Chain Family Slice with Profile Choice  

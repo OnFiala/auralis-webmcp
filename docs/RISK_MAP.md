@@ -1,5 +1,12 @@
 # Auralis Risk Map
 
+> **Historical scope notice (September 2, 2026):** This is the original OpenAI
+> Build Week 2026 Phase 3 risk map. Its unexecuted-experiment statements, dates,
+> competition sources, and phase gates describe that July checkpoint, not the
+> current WebMCP implementation or release. See `README.md` and
+> `docs/WEBMCP_PLAN.md` for current WebMCP risks and evidence. The historical
+> risk record below remains intact.
+
 **Status:** Approved and published Phase 3 risk map  
 **Assessment date:** July 14, 2026  
 **Phase-gate approval:** Approved by the human owner on July 14, 2026  

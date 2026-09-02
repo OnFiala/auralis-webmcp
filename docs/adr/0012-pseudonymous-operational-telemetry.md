@@ -1,12 +1,19 @@
 # ADR-0012: Data-minimized pseudonymous operational telemetry
 
-- **Status:** Accepted
+- **Status:** Superseded and not implemented; retained as an accepted original Build Week decision
 - **Date:** July 15, 2026
 - **Decision owners:** Human owner; primary Codex task
 - **Related Phase 5 decisions:** P5-D16
 - **Related product commitments:** Public runtime failures are diagnosable without user tracking
 - **Related risks:** RISK-SEC-01–RISK-SEC-02, RISK-DEMO-02, RISK-AI-01
 - **Related vertical-slice criteria:** VS-AC-20, VS-AC-22–VS-AC-23, VS-AC-28
+
+> **Current implementation note (September 2, 2026):** The application has no
+> client telemetry endpoint, analytics pipeline, or application-owned
+> persistence. It does not emit the allowlisted failure events described below.
+> Hosting infrastructure may retain its ordinary request logs under platform
+> controls, but those logs are not Auralis session evidence or a product data
+> flow. The telemetry proposal below was not shipped.
 
 ## Decision
 

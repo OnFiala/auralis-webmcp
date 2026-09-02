@@ -1,12 +1,18 @@
 # ADR-0010: Optional unique scene image through exact gpt-image-2
 
-- **Status:** Accepted
+- **Status:** Superseded for the current implementation; retained as an accepted original Build Week decision
 - **Date:** July 15, 2026
 - **Decision owners:** Human owner; primary Codex task
 - **Related Phase 5 decisions:** P5-D15, P5-D17
 - **Related product commitments:** Unique first-person scene imagery without optional-media critical-path dependence
 - **Related risks:** RISK-AI-02, RISK-IP-01, RISK-IP-03, RISK-SCENE-01, RISK-TIME-01
 - **Related vertical-slice criteria:** VS-AC-07, VS-AC-24, VS-AC-26
+
+> **Current implementation note (September 2, 2026):** No runtime image request
+> or image API route is implemented. Auralis uses reviewed, versioned static
+> generated assets with provenance in the media manifest. Image generation was
+> an authoring step and is not in the user journey, critical path, or session
+> data flow. The per-run `gpt-image-2` design below was not shipped.
 
 ## Decision
 

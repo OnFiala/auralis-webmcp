@@ -1,5 +1,12 @@
 # Auralis Minimal Dependency Model
 
+> **Historical scope notice (September 2, 2026):** This document records the
+> original OpenAI Build Week 2026 Phase 6 dependency design before the source
+> tree and implementation existed. Its evidence-state wording is historical,
+> not a current claim about the WebMCP branch. See `README.md` and
+> `docs/WEBMCP_PLAN.md` for current implementation boundaries. The original
+> dependency decision remains preserved below.
+
 **Status:** Approved and complete Phase 6 dependency model  
 **Date:** July 15, 2026  
 **Scope:** Manual-Audiogram Critical-Chain Family Slice with Profile Choice  
