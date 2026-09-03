@@ -6,7 +6,7 @@
 
 ## Judge quick start — five minutes
 
-**Live app:** [auralis-build-week-2026.vercel.app](https://auralis-build-week-2026.vercel.app)
+**Live app:** [auralis-webmcp.vercel.app](https://auralis-webmcp.vercel.app)
 
 **Public source:** [github.com/OnFiala/auralis-webmcp](https://github.com/OnFiala/auralis-webmcp)
 
@@ -36,7 +36,7 @@ Auralis is an educational, non-clinical experience. It does not diagnose hearing
 
 The product is designed for a family member, partner, or friend who wants to understand why an everyday conversation may become difficult. Its core proof is deliberately simple: keep the people, words, timing, and source scene the same, then change only the illustrated listening conditions. The person can hear both perspectives and describe the difference in ordinary language.
 
-- **Live Auralis WebMCP production:** [auralis-build-week-2026.vercel.app](https://auralis-build-week-2026.vercel.app), publicly accessible without Vercel authentication
+- **Live Auralis WebMCP production:** [auralis-webmcp.vercel.app](https://auralis-webmcp.vercel.app), publicly accessible without Vercel authentication
 - **Pre-WebMCP public baseline:** [`53fa83e188a0c5e076c5a0f651f2d937b167954d`](https://github.com/OnFiala/auralis-webmcp/commit/53fa83e188a0c5e076c5a0f651f2d937b167954d); the original runtime implementation was established at [`384ece76a29ab4f3c82e69e1bc1c585044d82c29`](https://github.com/OnFiala/auralis-webmcp/commit/384ece76a29ab4f3c82e69e1bc1c585044d82c29)
 - **Released WebMCP source:** [`7ee10c9471a8242691d49018f465701a7e6991af`](https://github.com/OnFiala/auralis-webmcp/commit/7ee10c9471a8242691d49018f465701a7e6991af) on `main`; `213f572` remains the verified security/dependency base and `2a856f0` the completed feature checkpoint before release-only work
 - **Production evidence:** Vercel deployment `dpl_3ZxHa8qmfb1bvCP4Zq2aKQKge8gg` was verified Ready and source-bound to exact `7ee10c9` on September 2, 2026; use the public production URL above rather than an access-protected Preview
@@ -313,7 +313,7 @@ The model tests use an injected provider and both browser journeys intercept `/a
 To run only the public smoke test against a deployed URL:
 
 ```bash
-PLAYWRIGHT_BASE_URL=https://auralis-build-week-2026.vercel.app npm run test:smoke
+PLAYWRIGHT_BASE_URL=https://auralis-webmcp.vercel.app npm run test:smoke
 ```
 
 ## Agent handoff
@@ -382,7 +382,7 @@ docs/                        Current WebMCP contract plus preserved historical B
 
 - **Platform identity:** the public repository is [`OnFiala/auralis-webmcp`](https://github.com/OnFiala/auralis-webmcp), the Vercel project is `auralis-webmcp`, and package metadata uses the same slug. The GitHub repository ID `1299645530` and Vercel project ID `prj_o5dsyt7SK4WjWpSRuLF467ZpIYjs` were preserved through the naming cutover.
 - **Released source:** the WebMCP product release is anchored at exact [`7ee10c9471a8242691d49018f465701a7e6991af`](https://github.com/OnFiala/auralis-webmcp/commit/7ee10c9471a8242691d49018f465701a7e6991af). On September 2, 2026, both `main` and `feat/webmcp-live-session-v1-6` were verified at that SHA with clean `0/0` upstream divergence. This judge-facing documentation repair is post-release and changes no product code.
-- **Production:** Vercel Production deployment `dpl_3ZxHa8qmfb1bvCP4Zq2aKQKge8gg` was verified `READY/PROMOTED` and source-bound to `main` at exact `7ee10c9`. [https://auralis-build-week-2026.vercel.app](https://auralis-build-week-2026.vercel.app) returned anonymous HTTP 200, exposed that deployment identity, and returned `status: ok` from `/api/health` at the release gate.
+- **Production:** Vercel Production deployment `dpl_3ZxHa8qmfb1bvCP4Zq2aKQKge8gg` was verified `READY/PROMOTED` and source-bound to `main` at exact `7ee10c9`. [https://auralis-webmcp.vercel.app](https://auralis-webmcp.vercel.app) is the current anonymous production URL and returns `status: ok` from `/api/health`.
 - **Release lineage:** `53fa83e` is the preserved pre-WebMCP baseline, `2a856f0` is the completed V1.10 feature checkpoint before release-only work, and `213f572` is the verified security/dependency base. The linear public history above `53fa83e` distinguishes the WebMCP work created during the Challenge period.
 - **Validation and owner evidence:** exact `213f572` passed the full clean release suite, dependency audits, production build, human journeys, and nine WebMCP browser journeys. The owner then completed the full exact Preview walkthrough. After release, the public Production URL passed its smoke check and a fresh nine-scenario production-targeted WebMCP journey. These automated page-side checks and owner-observed native sessions remain distinct evidence layers.
 - **Access and remaining gates:** the canonical production URL is public and requires no submitted credentials. Access-protected Preview and deployment-specific URLs are retained only as dated evidence, not as the judge entry point. Product development, `main` integration, and Production verification are complete; the public video and final Devpost submission remain open.
