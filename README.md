@@ -4,6 +4,15 @@
 
 **Auralis** is the product. **Auralis WebMCP** is the current shared human-agent edition.
 
+## Try it yourself
+
+1. Open [the live app](https://auralis-webmcp.vercel.app) and choose **Start the comparison**.
+2. Choose and confirm a synthetic hearing profile, then follow the visible prompts to load the family scene and acknowledge a comfortable headphone level.
+3. Use **Play A** and **Play B** to compare the source reference with the illustrative result. You can stop playback at any time.
+4. Try a change such as turning the television off or moving the speaker closer, then continue to the explanation and completion screens.
+
+This path works in an ordinary browser without an agent or an OpenAI API key. The comparison is illustrative and non-clinical; it does not reproduce an individual's hearing exactly. The optional GPT explanation may be unavailable, and the deterministic journey still permits completion.
+
 ## Judge quick start — five minutes
 
 **Live app:** [auralis-webmcp.vercel.app](https://auralis-webmcp.vercel.app)
